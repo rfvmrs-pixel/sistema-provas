@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { admins } from "@/db/schema";
+import { admins, sectors } from "@/db/schema";
 import { verifyPassword } from "@/lib/password";
 import { createAdminSession } from "@/lib/session";
 
@@ -24,6 +24,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Usuário ou senha inválidos." }, { status: 401 });
   }
 
-  await createAdminSession({ adminId: admin.id, username: admin.username });
-  return NextResponse.json({ ok: true });
+  let sectorName: string | null = null;
+  if (admin.sectorId !== null) {
+    const sector = await db.query.sectors.findFirst({ where: eq(sectors.id, admin.sectorId) });
+    sectorName = sector?.name ?? null;
+  }
+
+  await createAdminSession({
+    adminId: admin.id,
+    username: admin.username,
+    sectorId: admin.sectorId,
+    sectorName,
+  });
+  return NextResponse.json({ ok: true, sectorId: admin.sectorId, sectorName });
 }

@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, sectors, roles } from "@/db/schema";
-import { requireAdmin } from "@/lib/requireAdmin";
+import { requireAdmin, canAccessSector } from "@/lib/requireAdmin";
 import { hashPassword } from "@/lib/password";
 
 export async function GET() {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
+
+  const scope = guard.admin.sectorId !== null ? eq(employees.sectorId, guard.admin.sectorId) : undefined;
 
   const list = await db
     .select({
@@ -23,6 +25,7 @@ export async function GET() {
     .from(employees)
     .innerJoin(sectors, eq(employees.sectorId, sectors.id))
     .innerJoin(roles, eq(employees.roleId, roles.id))
+    .where(scope)
     .orderBy(asc(employees.name));
 
   return NextResponse.json({ employees: list });
@@ -46,6 +49,12 @@ export async function POST(request: NextRequest) {
   }
   if (password.length < 4) {
     return NextResponse.json({ error: "Senha deve ter ao menos 4 caracteres." }, { status: 400 });
+  }
+  if (!canAccessSector(guard.admin, sectorId)) {
+    return NextResponse.json(
+      { error: "Você só pode cadastrar funcionários no próprio contrato." },
+      { status: 403 },
+    );
   }
 
   try {

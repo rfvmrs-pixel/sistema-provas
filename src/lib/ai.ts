@@ -28,24 +28,37 @@ function getClient() {
 
 const TOOL_NAME = "salvar_prova";
 
+export type DocumentType = "IT" | "APR";
+
+const DOCUMENT_TYPE_GUIDANCE: Record<DocumentType, string> = {
+  IT: "Este documento é uma IT (Instrução de Trabalho): descreve o passo a passo correto de como uma tarefa/processo deve ser executado. Priorize questões sobre a sequência correta das etapas, responsabilidades de quem executa, e o que fazer/não fazer em cada passo — sempre olhando para a função do colaborador que vai responder a prova.",
+  APR: "Este documento é uma APR (Análise Preliminar de Risco): identifica perigos, riscos e medidas de controle/EPIs de uma atividade. Priorize questões sobre quais riscos existem em cada etapa da atividade, quais medidas de controle/EPIs são exigidos, e como agir diante de cada risco identificado.",
+};
+
 export async function generateExamFromText(
   sourceText: string,
-  opts: { numQuestions?: number; sourceFileName?: string } = {},
+  opts: {
+    numQuestions?: number;
+    sourceFileName?: string;
+    documentType?: DocumentType;
+    roleName?: string;
+  } = {},
 ): Promise<GeneratedExam> {
-  const numQuestions = opts.numQuestions ?? 10;
+  const numQuestions = opts.numQuestions ?? 15;
+  const documentType: DocumentType = opts.documentType === "APR" ? "APR" : "IT";
   const client = getClient();
 
   const message = await client.messages.create({
     model: MODEL,
     max_tokens: 8000,
     system:
-      "Você é um especialista em treinamento corporativo e elaboração de avaliações (provas) de múltipla escolha em português do Brasil, a partir de material de treinamento (manuais, procedimentos, políticas internas de empresas de logística). Gere questões claras, objetivas, que testem compreensão real do conteúdo (não só decoreba de frases soltas), com exatamente 4 alternativas plausíveis cada, apenas uma correta. Sempre classifique cada questão com um 'topic' curto (2-5 palavras) que identifique o tema/assunto dentro do documento, para permitir análise posterior de quais temas os funcionários têm mais dificuldade.",
+      `Você é um especialista em treinamento corporativo e elaboração de avaliações (provas) de múltipla escolha em português do Brasil, a partir de material de treinamento (manuais, procedimentos, políticas internas de empresas de logística). ${DOCUMENT_TYPE_GUIDANCE[documentType]} Gere questões claras, objetivas, que testem compreensão real do conteúdo (não só decoreba de frases soltas), com exatamente 4 alternativas plausíveis cada, apenas uma correta. Sempre classifique cada questão com um 'topic' curto (2-5 palavras) que identifique o tema/assunto dentro do documento, para permitir análise posterior de quais temas os funcionários têm mais dificuldade.`,
     messages: [
       {
         role: "user",
-        content: `Gere uma prova de múltipla escolha com exatamente ${numQuestions} questões com base no conteúdo abaixo (extraído de um PDF de treinamento${
+        content: `Gere uma prova de múltipla escolha com exatamente ${numQuestions} questões com base no conteúdo abaixo (extraído de um PDF do tipo ${documentType}${
           opts.sourceFileName ? ` chamado "${opts.sourceFileName}"` : ""
-        }).\n\nConteúdo:\n"""\n${sourceText}\n"""`,
+        }${opts.roleName ? `, destinado à função "${opts.roleName}"` : ""}).\n\nConteúdo:\n"""\n${sourceText}\n"""`,
       },
     ],
     tools: [

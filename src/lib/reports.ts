@@ -1,4 +1,4 @@
-import { and, avg, count, eq, isNotNull, sql } from "drizzle-orm";
+import { and, avg, count, eq, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { attempts, employees, sectors, roles, answers, questions, exams } from "@/db/schema";
 
@@ -21,12 +21,17 @@ export type TopicRow = {
 
 export type TopicByGroupRow = TopicRow & { groupId: number; groupName: string };
 
+// Todas as funções abaixo aceitam um `sectorId` opcional: quando informado
+// (gestor de contrato), os números só consideram aquele contrato. Quando
+// omitido (admin geral), consideram a empresa toda.
+
 function round(n: number | string | null): number {
   if (n === null) return 0;
   return Math.round(Number(n));
 }
 
-export async function getSectorSummary(): Promise<SummaryRow[]> {
+export async function getSectorSummary(sectorId?: number): Promise<SummaryRow[]> {
+  const scope = sectorId !== undefined ? eq(sectors.id, sectorId) : undefined;
   const rows = await db
     .select({
       id: sectors.id,
@@ -40,6 +45,7 @@ export async function getSectorSummary(): Promise<SummaryRow[]> {
       attempts,
       and(eq(attempts.employeeId, employees.id), isNotNull(attempts.percentage)),
     )
+    .where(scope)
     .groupBy(sectors.id, sectors.name)
     .orderBy(sectors.name);
 
@@ -52,7 +58,8 @@ export async function getSectorSummary(): Promise<SummaryRow[]> {
   }));
 }
 
-export async function getRoleSummary(): Promise<SummaryRow[]> {
+export async function getRoleSummary(sectorId?: number): Promise<SummaryRow[]> {
+  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
   const rows = await db
     .select({
       id: roles.id,
@@ -61,7 +68,7 @@ export async function getRoleSummary(): Promise<SummaryRow[]> {
       attemptCount: count(attempts.id),
     })
     .from(roles)
-    .leftJoin(employees, eq(employees.roleId, roles.id))
+    .leftJoin(employees, and(eq(employees.roleId, roles.id), scope))
     .leftJoin(
       attempts,
       and(eq(attempts.employeeId, employees.id), isNotNull(attempts.percentage)),
@@ -78,9 +85,10 @@ export async function getRoleSummary(): Promise<SummaryRow[]> {
   }));
 }
 
-export async function getEmployeeSummary(): Promise<
-  (SummaryRow & { sectorName: string; roleName: string })[]
-> {
+export async function getEmployeeSummary(
+  sectorId?: number,
+): Promise<(SummaryRow & { sectorName: string; roleName: string })[]> {
+  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
   const rows = await db
     .select({
       id: employees.id,
@@ -97,6 +105,7 @@ export async function getEmployeeSummary(): Promise<
       attempts,
       and(eq(attempts.employeeId, employees.id), isNotNull(attempts.percentage)),
     )
+    .where(scope)
     .groupBy(employees.id, employees.name, sectors.name, roles.name)
     .orderBy(employees.name);
 
@@ -111,7 +120,8 @@ export async function getEmployeeSummary(): Promise<
   }));
 }
 
-export async function getTopicSummary(): Promise<TopicRow[]> {
+export async function getTopicSummary(sectorId?: number): Promise<TopicRow[]> {
+  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
   const rows = await db
     .select({
       topic: questions.topic,
@@ -120,6 +130,9 @@ export async function getTopicSummary(): Promise<TopicRow[]> {
     })
     .from(answers)
     .innerJoin(questions, eq(answers.questionId, questions.id))
+    .innerJoin(attempts, eq(answers.attemptId, attempts.id))
+    .innerJoin(employees, eq(attempts.employeeId, employees.id))
+    .where(scope)
     .groupBy(questions.topic)
     .orderBy(questions.topic);
 
@@ -137,7 +150,8 @@ export async function getTopicSummary(): Promise<TopicRow[]> {
     .sort((a, b) => a.accuracy - b.accuracy);
 }
 
-export async function getTopicBySector(): Promise<TopicByGroupRow[]> {
+export async function getTopicBySector(sectorId?: number): Promise<TopicByGroupRow[]> {
+  const scope = sectorId !== undefined ? eq(sectors.id, sectorId) : undefined;
   const rows = await db
     .select({
       groupId: sectors.id,
@@ -151,6 +165,7 @@ export async function getTopicBySector(): Promise<TopicByGroupRow[]> {
     .innerJoin(attempts, eq(answers.attemptId, attempts.id))
     .innerJoin(employees, eq(attempts.employeeId, employees.id))
     .innerJoin(sectors, eq(employees.sectorId, sectors.id))
+    .where(scope)
     .groupBy(sectors.id, sectors.name, questions.topic)
     .orderBy(sectors.name, questions.topic);
 
@@ -170,7 +185,8 @@ export async function getTopicBySector(): Promise<TopicByGroupRow[]> {
     .sort((a, b) => a.accuracy - b.accuracy);
 }
 
-export async function getTopicByRole(): Promise<TopicByGroupRow[]> {
+export async function getTopicByRole(sectorId?: number): Promise<TopicByGroupRow[]> {
+  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
   const rows = await db
     .select({
       groupId: roles.id,
@@ -184,6 +200,7 @@ export async function getTopicByRole(): Promise<TopicByGroupRow[]> {
     .innerJoin(attempts, eq(answers.attemptId, attempts.id))
     .innerJoin(employees, eq(attempts.employeeId, employees.id))
     .innerJoin(roles, eq(employees.roleId, roles.id))
+    .where(scope)
     .groupBy(roles.id, roles.name, questions.topic)
     .orderBy(roles.name, questions.topic);
 
@@ -211,6 +228,8 @@ export async function getAttemptsByExam(examId: number) {
       percentage: attempts.percentage,
       score: attempts.score,
       totalQuestions: attempts.totalQuestions,
+      mode: attempts.mode,
+      sessionLabel: attempts.sessionLabel,
       employeeName: employees.name,
       sectorName: sectors.name,
       roleName: roles.name,
@@ -223,7 +242,10 @@ export async function getAttemptsByExam(examId: number) {
     .orderBy(sql`${attempts.finishedAt} desc nulls last`);
 }
 
-export async function getRecentAttempts(limit = 30) {
+export async function getRecentAttempts(limit = 30, sectorId?: number) {
+  const conditions: SQL[] = [isNotNull(attempts.finishedAt)];
+  if (sectorId !== undefined) conditions.push(eq(employees.sectorId, sectorId));
+
   return db
     .select({
       id: attempts.id,
@@ -231,6 +253,8 @@ export async function getRecentAttempts(limit = 30) {
       percentage: attempts.percentage,
       score: attempts.score,
       totalQuestions: attempts.totalQuestions,
+      mode: attempts.mode,
+      sessionLabel: attempts.sessionLabel,
       employeeName: employees.name,
       sectorName: sectors.name,
       roleName: roles.name,
@@ -241,7 +265,7 @@ export async function getRecentAttempts(limit = 30) {
     .innerJoin(sectors, eq(employees.sectorId, sectors.id))
     .innerJoin(roles, eq(employees.roleId, roles.id))
     .innerJoin(exams, eq(attempts.examId, exams.id))
-    .where(isNotNull(attempts.finishedAt))
+    .where(and(...conditions))
     .orderBy(sql`${attempts.finishedAt} desc`)
     .limit(limit);
 }

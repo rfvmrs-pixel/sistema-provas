@@ -7,7 +7,14 @@ const secret = new TextEncoder().encode(secretValue);
 const ADMIN_COOKIE = "admin_session";
 const EMPLOYEE_COOKIE = "employee_session";
 
-export type AdminSessionData = { adminId: number; username: string };
+export type AdminSessionData = {
+  adminId: number;
+  username: string;
+  // null = admin geral (super admin, todos os contratos). Número = gestor
+  // travado no próprio contrato (Setor).
+  sectorId: number | null;
+  sectorName: string | null;
+};
 export type EmployeeSessionData = {
   employeeId: number;
   name: string;
@@ -15,6 +22,12 @@ export type EmployeeSessionData = {
   sectorName: string;
   roleId: number;
   roleName: string;
+  // "simulado" (padrão): login pessoal, vê/pratica qualquer prova do seu Setor+Função.
+  // "oficial": entrou com o código de uso único de uma "prova do dia" — só pode
+  // fazer o exame travado em examId, e o código é queimado ao finalizar.
+  mode?: "simulado" | "oficial";
+  examId?: number;
+  sessionLabel?: string | null;
 };
 
 async function sign(data: Record<string, unknown>, expires: string) {

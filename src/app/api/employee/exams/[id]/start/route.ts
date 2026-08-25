@@ -13,9 +13,20 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   const { id } = await ctx.params;
   const examId = Number(id);
 
+  const mode = employee.mode === "oficial" ? "oficial" : "simulado";
+  if (mode === "oficial" && employee.examId !== examId) {
+    return NextResponse.json(
+      { error: "Esse código só dá acesso a uma prova específica." },
+      { status: 403 },
+    );
+  }
+
   const exam = await db.query.exams.findFirst({ where: eq(exams.id, examId) });
   if (!exam || !exam.active) {
     return NextResponse.json({ error: "Prova não disponível." }, { status: 404 });
+  }
+  if (exam.sectorId !== employee.sectorId || exam.roleId !== employee.roleId) {
+    return NextResponse.json({ error: "Essa prova não é do seu Setor/Função." }, { status: 403 });
   }
 
   const examQuestions = await db
@@ -39,6 +50,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       examId,
       employeeId: employee.employeeId,
       totalQuestions: examQuestions.length,
+      mode,
+      sessionLabel: mode === "oficial" ? employee.sessionLabel ?? null : null,
     })
     .returning();
 

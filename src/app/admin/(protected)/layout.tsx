@@ -3,13 +3,15 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/session";
 import LogoutButton from "./logout-button";
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { href: "/admin", label: "Painel" },
   { href: "/admin/provas", label: "Provas" },
   { href: "/admin/funcionarios", label: "Funcionários" },
-  { href: "/admin/setores", label: "Setores" },
   { href: "/admin/funcoes", label: "Funções" },
 ];
+
+// "Contratos" (Setores) e criação de gestores só aparecem para o admin geral.
+const SUPER_ADMIN_NAV_ITEM = { href: "/admin/setores", label: "Contratos" };
 
 export default async function AdminProtectedLayout({ children }: { children: React.ReactNode }) {
   const admin = await getAdminSession();
@@ -17,14 +19,24 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
     redirect("/admin/login");
   }
 
+  const navItems =
+    admin.sectorId === null ? [...BASE_NAV_ITEMS, SUPER_ADMIN_NAV_ITEM] : BASE_NAV_ITEMS;
+
   return (
     <div className="flex min-h-full flex-1 flex-col bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-8">
-            <span className="text-sm font-semibold text-slate-900">Sistema de Provas · Admin</span>
+            <span className="text-sm font-semibold text-slate-900">
+              Sistema de Avaliação de Processo
+              {admin.sectorName && (
+                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                  {admin.sectorName}
+                </span>
+              )}
+            </span>
             <nav className="flex gap-1">
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -36,7 +48,12 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
             </nav>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-500">{admin.username}</span>
+            <span className="text-sm text-slate-500">
+              {admin.username}
+              {admin.sectorId === null && (
+                <span className="ml-1.5 text-xs text-slate-400">(admin geral)</span>
+              )}
+            </span>
             <LogoutButton />
           </div>
         </div>

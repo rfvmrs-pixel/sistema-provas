@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 
 type Sector = { id: number; name: string };
+type DocumentType = "IT" | "APR";
 type ExamListItem = {
   id: number;
   title: string;
   summary: string | null;
   passingScore: number;
+  documentType: DocumentType;
   questionCount: number;
   lastResult: { percentage: number | null; finishedAt: string | null } | null;
 };
@@ -24,11 +26,13 @@ type ReviewItem = {
   topic: string | null;
 };
 
+type Mode = "simulado" | "oficial";
+
 type Step =
   | { kind: "login" }
-  | { kind: "list"; employeeName: string }
-  | { kind: "taking"; attemptId: number; examTitle: string; questions: Question[] }
-  | { kind: "result"; percentage: number; passed: boolean; passingScore: number; review: ReviewItem[] };
+  | { kind: "list"; employeeName: string; mode: Mode }
+  | { kind: "taking"; attemptId: number; examTitle: string; questions: Question[]; mode: Mode }
+  | { kind: "result"; percentage: number; passed: boolean; passingScore: number; review: ReviewItem[]; mode: Mode };
 
 export default function ProvaPage() {
   const [step, setStep] = useState<Step>({ kind: "login" });
@@ -36,6 +40,8 @@ export default function ProvaPage() {
   const [name, setName] = useState("");
   const [sectorId, setSectorId] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [useCode, setUseCode] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [exams, setExams] = useState<ExamListItem[]>([]);
   const [answersMap, setAnswersMap] = useState<Record<number, string>>({});
@@ -47,10 +53,13 @@ export default function ProvaPage() {
       .then((d) => setSectors(d.sectors ?? []));
   }, []);
 
-  async function loadExams() {
+  async function loadExams(): Promise<{ mode: Mode; exams: ExamListItem[] }> {
     const res = await fetch("/api/employee/exams");
     const data = await res.json();
-    if (res.ok) setExams(data.exams ?? []);
+    const list: ExamListItem[] = res.ok ? data.exams ?? [] : [];
+    const mode: Mode = data.employee?.mode === "oficial" ? "oficial" : "simulado";
+    setExams(list);
+    return { mode, exams: list };
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -61,21 +70,31 @@ export default function ProvaPage() {
       const res = await fetch("/api/employee/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, sectorId: Number(sectorId), password }),
+        body: JSON.stringify(
+          useCode
+            ? { name, sectorId: Number(sectorId), code }
+            : { name, sectorId: Number(sectorId), password },
+        ),
       });
       const data = await res.json();
       if (!res.ok) {
         setLoginError(data.error || "Falha ao entrar.");
         return;
       }
-      await loadExams();
-      setStep({ kind: "list", employeeName: name });
+      const { mode, exams: list } = await loadExams();
+      // Prova do dia: já vem travada em uma única prova, então pula direto
+      // pra ela em vez de mostrar uma lista de 1 item.
+      if (mode === "oficial" && list.length === 1) {
+        await startExam(list[0].id, list[0].title, mode);
+        return;
+      }
+      setStep({ kind: "list", employeeName: name, mode });
     } finally {
       setBusy(false);
     }
   }
 
-  async function startExam(examId: number, examTitle: string) {
+  async function startExam(examId: number, examTitle: string, mode: Mode) {
     setBusy(true);
     try {
       const res = await fetch(`/api/employee/exams/${examId}/start`, { method: "POST" });
@@ -90,6 +109,7 @@ export default function ProvaPage() {
         attemptId: data.attemptId,
         examTitle,
         questions: data.questions,
+        mode,
       });
     } finally {
       setBusy(false);
@@ -126,6 +146,7 @@ export default function ProvaPage() {
         passed: !!data.passed,
         passingScore: data.passingScore ?? 70,
         review: data.review,
+        mode: step.mode,
       });
     } finally {
       setBusy(false);
@@ -133,8 +154,9 @@ export default function ProvaPage() {
   }
 
   async function backToList() {
-    await loadExams();
-    setStep((s) => (s.kind === "login" ? s : { kind: "list", employeeName: name }));
+    const { mode, exams: list } = await loadExams();
+    setStep((s) => (s.kind === "login" ? s : { kind: "list", employeeName: name, mode }));
+    void list;
   }
 
   return (
@@ -159,7 +181,7 @@ export default function ProvaPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Setor</label>
+                <label className="block text-sm font-medium text-slate-700">Contrato</label>
                 <select
                   value={sectorId}
                   onChange={(e) => setSectorId(e.target.value)}
@@ -175,14 +197,40 @@ export default function ProvaPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">Senha</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-                  required
-                />
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-slate-700">
+                    {useCode ? "Código da prova do dia" : "Senha"}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseCode((v) => !v);
+                      setPassword("");
+                      setCode("");
+                    }}
+                    className="text-xs text-slate-500 underline"
+                  >
+                    {useCode ? "usar minha senha" : "tenho um código de prova do dia"}
+                  </button>
+                </div>
+                {useCode ? (
+                  <input
+                    inputMode="numeric"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="000000"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm tracking-widest focus:border-slate-500 focus:outline-none"
+                    required
+                  />
+                ) : (
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                    required
+                  />
+                )}
               </div>
             </div>
 
@@ -210,7 +258,18 @@ export default function ProvaPage() {
               <div key={ex.id} className="rounded-xl border border-slate-200 bg-white p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-sm font-semibold text-slate-900">{ex.title}</h2>
+                    <h2 className="text-sm font-semibold text-slate-900">
+                      {ex.title}{" "}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          ex.documentType === "APR"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-sky-100 text-sky-700"
+                        }`}
+                      >
+                        {ex.documentType}
+                      </span>
+                    </h2>
                     {ex.summary && <p className="mt-1 text-xs text-slate-500">{ex.summary}</p>}
                     <p className="mt-1 text-xs text-slate-400">{ex.questionCount} questões</p>
                     {ex.lastResult?.finishedAt && (
@@ -221,7 +280,7 @@ export default function ProvaPage() {
                   </div>
                   <button
                     disabled={busy}
-                    onClick={() => startExam(ex.id, ex.title)}
+                    onClick={() => startExam(ex.id, ex.title, step.mode)}
                     className="shrink-0 rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
                   >
                     {ex.lastResult?.finishedAt ? "Refazer" : "Começar"}
@@ -290,12 +349,19 @@ export default function ProvaPage() {
                   ? "Parabéns, você atingiu a nota mínima!"
                   : `Nota mínima exigida: ${step.passingScore}%. Recomendamos revisar o material.`}
               </p>
-              <button
-                onClick={backToList}
-                className="mt-6 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-              >
-                Voltar para a lista de provas
-              </button>
+              {step.mode === "oficial" ? (
+                <p className="mt-6 text-sm text-slate-500">
+                  Prova oficial concluída. O resultado foi registrado para o seu gestor — pode
+                  fechar esta janela.
+                </p>
+              ) : (
+                <button
+                  onClick={backToList}
+                  className="mt-6 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  Voltar para a lista de provas
+                </button>
+              )}
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-5">

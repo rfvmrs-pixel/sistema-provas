@@ -7,20 +7,24 @@ import {
   getTopicSummary,
   getTopicBySector,
   getTopicByRole,
+  getRecentAttempts,
 } from "@/lib/reports";
 
 export async function GET() {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
-  const [sectorSummary, roleSummary, employeeSummary, topicSummary, topicBySector, topicByRole] =
+  const sectorId = guard.admin.sectorId ?? undefined;
+
+  const [sectorSummary, roleSummary, employeeSummary, topicSummary, topicBySector, topicByRole, recentAttempts] =
     await Promise.all([
-      getSectorSummary(),
-      getRoleSummary(),
-      getEmployeeSummary(),
-      getTopicSummary(),
-      getTopicBySector(),
-      getTopicByRole(),
+      getSectorSummary(sectorId),
+      getRoleSummary(sectorId),
+      getEmployeeSummary(sectorId),
+      getTopicSummary(sectorId),
+      getTopicBySector(sectorId),
+      getTopicByRole(sectorId),
+      getRecentAttempts(30, sectorId),
     ]);
 
   return NextResponse.json({
@@ -30,5 +34,6 @@ export async function GET() {
     topicSummary,
     topicBySector,
     topicByRole,
+    recentAttempts,
   });
 }

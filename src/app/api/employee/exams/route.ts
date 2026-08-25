@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { exams, questions, attempts } from "@/db/schema";
 import { getEmployeeSession } from "@/lib/session";
-import { sql } from "drizzle-orm";
 
 export async function GET() {
   const employee = await getEmployeeSession();
@@ -11,17 +10,25 @@ export async function GET() {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
   }
 
+  // Modo "oficial" (prova do dia, código de uso único): trava na única prova
+  // combinada no login, não deixa navegar por outras provas do Setor/Função.
+  const scope =
+    employee.mode === "oficial" && employee.examId
+      ? eq(exams.id, employee.examId)
+      : and(eq(exams.sectorId, employee.sectorId), eq(exams.roleId, employee.roleId));
+
   const activeExams = await db
     .select({
       id: exams.id,
       title: exams.title,
       summary: exams.summary,
       passingScore: exams.passingScore,
+      documentType: exams.documentType,
       questionCount: sql<number>`count(${questions.id})`.mapWith(Number),
     })
     .from(exams)
     .leftJoin(questions, eq(questions.examId, exams.id))
-    .where(eq(exams.active, true))
+    .where(and(eq(exams.active, true), scope))
     .groupBy(exams.id)
     .orderBy(desc(exams.createdAt));
 
@@ -45,8 +52,13 @@ export async function GET() {
     .filter((e) => e.questionCount > 0)
     .map((e) => ({
       ...e,
-      lastResult: lastAttemptByExam.get(e.id) ?? null,
+      // No modo oficial o colaborador não tem login persistente pra consultar
+      // depois, então não expomos resultado de tentativas anteriores aqui.
+      lastResult: employee.mode === "oficial" ? null : lastAttemptByExam.get(e.id) ?? null,
     }));
 
-  return NextResponse.json({ employee, exams: result });
+  return NextResponse.json({
+    employee: { name: employee.name, mode: employee.mode ?? "simulado", sessionLabel: employee.sessionLabel ?? null },
+    exams: result,
+  });
 }

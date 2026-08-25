@@ -1,11 +1,21 @@
 import "dotenv/config";
 import { db } from "../db";
-import { exams, questions } from "../db/schema";
+import { exams, questions, sectors, roles } from "../db/schema";
 
 async function main() {
+  const [sector] = await db.select().from(sectors).limit(1);
+  const [role] = await db.select().from(roles).limit(1);
+  if (!sector || !role) {
+    throw new Error(
+      "Nenhum contrato/função cadastrado ainda. Rode o seed principal (src/scripts/seed.ts) antes.",
+    );
+  }
+
   const [exam] = await db
     .insert(exams)
     .values({
+      sectorId: sector.id,
+      roleId: role.id,
       title: "Prova de Teste - Segurança no Almoxarifado",
       sourceFileName: "teste.pdf",
       summary: "Prova de teste inserida manualmente para validar o fluxo.",

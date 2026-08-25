@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { attempts, questions, answers, exams } from "@/db/schema";
-import { getEmployeeSession } from "@/lib/session";
+import { attempts, questions, answers, exams, employees } from "@/db/schema";
+import { getEmployeeSession, clearEmployeeSession } from "@/lib/session";
 
 type SubmittedAnswer = { questionId: number; selectedKey: string | null };
 
@@ -31,7 +31,6 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     .from(questions)
     .where(eq(questions.examId, attempt.examId));
 
-  const byId = new Map(examQuestions.map((q) => [q.id, q]));
   let score = 0;
 
   const answerRows = examQuestions.map((q) => {
@@ -56,6 +55,22 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     .returning();
 
   const exam = await db.query.exams.findFirst({ where: eq(exams.id, attempt.examId) });
+
+  // Modo "oficial" (prova do dia): o código de uso único é queimado agora que
+  // a tentativa terminou, e a sessão é encerrada — não dá pra reusar o mesmo
+  // código nem continuar navegando como esse colaborador depois disso.
+  if (attempt.mode === "oficial") {
+    await db
+      .update(employees)
+      .set({
+        tempCodeHash: null,
+        tempCodeExamId: null,
+        tempCodeSessionLabel: null,
+        tempCodeExpiresAt: null,
+      })
+      .where(eq(employees.id, employee.employeeId));
+    await clearEmployeeSession();
+  }
 
   const review = examQuestions
     .sort((a, b) => a.order - b.order)
