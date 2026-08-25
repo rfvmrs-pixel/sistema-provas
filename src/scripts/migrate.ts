@@ -8,11 +8,10 @@ async function main() {
 
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl:
-      process.env.DATABASE_URL?.includes("localhost") ||
-      process.env.DATABASE_URL?.includes("127.0.0.1")
-        ? false
-        : { rejectUnauthorized: false },
+    // This is a self-hosted Postgres container (Railway's postgres:16 image),
+    // not a managed database with TLS configured, so SSL must stay off —
+    // the connection is already private/internal to the Railway network.
+    ssl: false,
     connectionTimeoutMillis: 15000,
   });
 
