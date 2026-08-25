@@ -18,7 +18,7 @@ async function main() {
     console.log("IMPORTANTE: troque essa senha assim que possível.");
   }
 
-  const defaultSectors = ["Logística", "Almoxarifado", "Manutenção", "Administrativo", "Transporte"];
+  const defaultSectors = ["EQUINOR", "SPOT", "TPS", "LON1", "LON2", "PRIME OCEAN", "MANUTENÇÃO"];
   const defaultRoles = ["Motorista", "Auxiliar de Logística", "Conferente", "Supervisor", "Analista"];
 
   for (const name of defaultSectors) {

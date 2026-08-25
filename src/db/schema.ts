@@ -59,15 +59,27 @@ export const employees = pgTable(
 );
 
 // ---------- Provas ----------
-export const exams = pgTable("exams", {
-  id: serial("id").primaryKey(),
-  title: varchar("title", { length: 250 }).notNull(),
-  sourceFileName: varchar("source_file_name", { length: 300 }),
-  summary: text("summary"),
-  active: boolean("active").default(true).notNull(),
-  passingScore: integer("passing_score").default(70).notNull(), // % mínimo p/ considerar aprovado
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const exams = pgTable(
+  "exams",
+  {
+    id: serial("id").primaryKey(),
+    title: varchar("title", { length: 250 }).notNull(),
+    sourceFileName: varchar("source_file_name", { length: 300 }),
+    summary: text("summary"),
+    active: boolean("active").default(true).notNull(),
+    passingScore: integer("passing_score").default(70).notNull(), // % mínimo p/ considerar aprovado
+    // Cada prova pertence a exatamente 1 Setor + 1 Função. Funcionário só vê
+    // provas do seu próprio Setor E Função (ver /api/employee/exams).
+    sectorId: integer("sector_id")
+      .notNull()
+      .references(() => sectors.id, { onDelete: "restrict" }),
+    roleId: integer("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [index("exams_sector_role_idx").on(t.sectorId, t.roleId)],
+);
 
 // ---------- Questões ----------
 // options: [{ key: "A", text: "..." }, { key: "B", text: "..." }, ...]
@@ -134,10 +146,12 @@ export const answers = pgTable(
 // ---------- Relations ----------
 export const sectorsRelations = relations(sectors, ({ many }) => ({
   employees: many(employees),
+  exams: many(exams),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({
   employees: many(employees),
+  exams: many(exams),
 }));
 
 export const employeesRelations = relations(employees, ({ one, many }) => ({
@@ -146,9 +160,11 @@ export const employeesRelations = relations(employees, ({ one, many }) => ({
   attempts: many(attempts),
 }));
 
-export const examsRelations = relations(exams, ({ many }) => ({
+export const examsRelations = relations(exams, ({ one, many }) => ({
   questions: many(questions),
   attempts: many(attempts),
+  sector: one(sectors, { fields: [exams.sectorId], references: [sectors.id] }),
+  role: one(roles, { fields: [exams.roleId], references: [roles.id] }),
 }));
 
 export const questionsRelations = relations(questions, ({ one, many }) => ({

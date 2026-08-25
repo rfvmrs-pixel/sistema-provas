@@ -21,7 +21,13 @@ export async function GET() {
     })
     .from(exams)
     .leftJoin(questions, eq(questions.examId, exams.id))
-    .where(eq(exams.active, true))
+    .where(
+      and(
+        eq(exams.active, true),
+        eq(exams.sectorId, employee.sectorId),
+        eq(exams.roleId, employee.roleId),
+      ),
+    )
     .groupBy(exams.id)
     .orderBy(desc(exams.createdAt));
 

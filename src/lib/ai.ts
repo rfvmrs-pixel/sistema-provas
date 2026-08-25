@@ -32,7 +32,7 @@ export async function generateExamFromText(
   sourceText: string,
   opts: { numQuestions?: number; sourceFileName?: string } = {},
 ): Promise<GeneratedExam> {
-  const numQuestions = opts.numQuestions ?? 10;
+  const numQuestions = opts.numQuestions ?? 15;
   const client = getClient();
 
   const message = await client.messages.create({
