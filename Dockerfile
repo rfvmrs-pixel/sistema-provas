@@ -25,4 +25,4 @@ COPY --from=build /app/src/scripts ./src/scripts
 COPY --from=build /app/tsconfig.json ./tsconfig.json
 
 EXPOSE 3000
-CMD ["sh", "-c", "npx drizzle-kit migrate && npx tsx src/scripts/seed.ts && npm start"]
+CMD ["npm", "start"]
