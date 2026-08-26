@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { exams, employees } from "@/db/schema";
-import { requireAdmin, canAccessSector } from "@/lib/requireAdmin";
+import { requireEditor, canAccessSector } from "@/lib/requireAdmin";
 import { hashPassword } from "@/lib/password";
 
 const CODE_EXPIRES_HOURS = 48;
@@ -22,7 +22,7 @@ function generateCode(): string {
 // persistente, o colaborador não consegue consultar o resultado depois; só
 // aparece nos relatórios do gestor.
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const guard = await requireAdmin();
+  const guard = await requireEditor();
   if (!guard.ok) return guard.response;
 
   const { id } = await ctx.params;

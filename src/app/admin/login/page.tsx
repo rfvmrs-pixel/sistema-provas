@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -40,8 +41,15 @@ export default function AdminLoginPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm"
       >
-        <h1 className="text-lg font-semibold text-slate-900">Área do administrador</h1>
-        <p className="mt-1 text-sm text-slate-500">Entre com seu usuário e senha.</p>
+        <Image
+          src="/logos/triunfo_mark.png"
+          alt="Triunfo"
+          width={40}
+          height={40}
+          className="mx-auto h-10 w-10"
+        />
+        <h1 className="mt-3 text-center text-lg font-semibold text-slate-900">Triunfo Skill</h1>
+        <p className="mt-1 text-center text-sm text-slate-500">Entre com seu usuário e senha.</p>
 
         <div className="mt-6 space-y-4">
           <div>

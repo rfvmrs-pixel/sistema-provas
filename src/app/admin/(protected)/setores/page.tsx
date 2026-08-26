@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 
 type Sector = { id: number; name: string };
 type Gestor = { id: number; username: string };
+type Director = { id: number; username: string };
 
 export default function ContratosPage() {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [gestoresBySector, setGestoresBySector] = useState<Record<number, Gestor[]>>({});
+  const [directors, setDirectors] = useState<Director[]>([]);
   const [name, setName] = useState("");
   const [gestorUsername, setGestorUsername] = useState("");
   const [gestorPassword, setGestorPassword] = useState("");
@@ -16,12 +18,26 @@ export default function ContratosPage() {
   const [savingGestorFor, setSavingGestorFor] = useState<number | null>(null);
   const [gestorForm, setGestorForm] = useState<Record<number, { username: string; password: string }>>({});
 
+  // Conta(s) de Diretoria: enxergam todos os Contratos e as estatísticas da
+  // empresa, mas são só leitura (não editam nada).
+  const [directorUsername, setDirectorUsername] = useState("");
+  const [directorPassword, setDirectorPassword] = useState("");
+  const [savingDirector, setSavingDirector] = useState(false);
+  const [directorError, setDirectorError] = useState<string | null>(null);
+
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/admin/sectors");
+    const [res, directorsRes] = await Promise.all([
+      fetch("/api/admin/sectors"),
+      fetch("/api/admin/directors"),
+    ]);
     const data = await res.json();
     const list: Sector[] = data.sectors ?? [];
     setSectors(list);
+    if (directorsRes.ok) {
+      const directorsData = await directorsRes.json();
+      setDirectors(directorsData.directors ?? []);
+    }
 
     const entries = await Promise.all(
       list.map(async (s) => {
@@ -38,6 +54,30 @@ export default function ContratosPage() {
   useEffect(() => {
     load();
   }, []);
+
+  async function handleAddDirector(e: React.FormEvent) {
+    e.preventDefault();
+    if (!directorUsername || !directorPassword) return;
+    setDirectorError(null);
+    setSavingDirector(true);
+    try {
+      const res = await fetch("/api/admin/directors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: directorUsername, password: directorPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDirectorError(data.error || "Falha ao criar conta de Diretoria.");
+        return;
+      }
+      setDirectorUsername("");
+      setDirectorPassword("");
+      load();
+    } finally {
+      setSavingDirector(false);
+    }
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -192,6 +232,56 @@ export default function ContratosPage() {
                 </li>
               );
             })}
+          </ul>
+        )}
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Contas de Diretoria</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Enxergam todos os Contratos e as estatísticas da empresa como um todo, igual ao admin
+          geral — mas são somente leitura: não criam, editam ou excluem nada.
+        </p>
+      </div>
+
+      <form
+        onSubmit={handleAddDirector}
+        className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-3"
+      >
+        <input
+          value={directorUsername}
+          onChange={(e) => setDirectorUsername(e.target.value)}
+          placeholder="Usuário da Diretoria"
+          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+          required
+        />
+        <input
+          type="password"
+          value={directorPassword}
+          onChange={(e) => setDirectorPassword(e.target.value)}
+          placeholder="Senha"
+          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+          required
+        />
+        <button
+          disabled={savingDirector || !directorUsername || !directorPassword}
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+        >
+          {savingDirector ? "Salvando..." : "Criar/redefinir conta de Diretoria"}
+        </button>
+      </form>
+      {directorError && <p className="text-sm text-red-600">{directorError}</p>}
+
+      <div className="rounded-xl border border-slate-200 bg-white">
+        {directors.length === 0 ? (
+          <p className="p-5 text-sm text-slate-400">Nenhuma conta de Diretoria cadastrada ainda.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {directors.map((d) => (
+              <li key={d.id} className="px-5 py-3 text-sm text-slate-800">
+                {d.username}
+              </li>
+            ))}
           </ul>
         )}
       </div>

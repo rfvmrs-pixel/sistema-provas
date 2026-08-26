@@ -7,13 +7,18 @@ const secret = new TextEncoder().encode(secretValue);
 const ADMIN_COOKIE = "admin_session";
 const EMPLOYEE_COOKIE = "employee_session";
 
+export type AdminRole = "admin" | "diretoria" | "gestor";
+
 export type AdminSessionData = {
   adminId: number;
   username: string;
-  // null = admin geral (super admin, todos os contratos). Número = gestor
-  // travado no próprio contrato (Setor).
+  // null = enxerga todos os Contratos (role "admin" ou "diretoria"). Número =
+  // gestor travado no próprio contrato (Setor).
   sectorId: number | null;
   sectorName: string | null;
+  // "admin" = super admin, edita tudo. "diretoria" = vê tudo, só leitura.
+  // "gestor" = só o próprio Contrato, com escrita normal nele.
+  role: AdminRole;
 };
 export type EmployeeSessionData = {
   employeeId: number;

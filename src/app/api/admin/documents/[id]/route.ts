@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
-import { requireAdmin, canAccessSector } from "@/lib/requireAdmin";
+import { requireAdmin, requireEditor, canAccessSector } from "@/lib/requireAdmin";
 
 // GET: baixa o PDF original salvo na biblioteca.
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -28,7 +28,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 // DELETE: remove o PDF da biblioteca. Provas já geradas a partir dele continuam
 // existindo normalmente (exams.documentId só fica null).
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const guard = await requireAdmin();
+  const guard = await requireEditor();
   if (!guard.ok) return guard.response;
 
   const { id } = await ctx.params;

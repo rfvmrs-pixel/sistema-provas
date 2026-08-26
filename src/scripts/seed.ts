@@ -13,13 +13,20 @@ async function main() {
     console.log(`Admin "${username}" já existe. Nada a fazer.`);
   } else {
     const passwordHash = await hashPassword(password);
-    await db.insert(admins).values({ username, passwordHash });
+    await db.insert(admins).values({ username, passwordHash, role: "admin" });
     console.log(`Admin criado -> usuário: "${username}" | senha: "${password}"`);
     console.log("IMPORTANTE: troque essa senha assim que possível.");
   }
 
   const defaultSectors = ["EQUINOR", "SPOT", "TPS", "LON1", "LON2", "PRIME OCEAN", "MANUTENÇÃO"];
-  const defaultRoles = ["Motorista", "Auxiliar de Logística", "Conferente", "Supervisor", "Analista"];
+  const defaultRoles = [
+    "Motorista",
+    "Auxiliar de Logística",
+    "Conferente",
+    "Supervisor",
+    "Analista",
+    "OPMC",
+  ];
 
   for (const name of defaultSectors) {
     const found = await db.query.sectors.findFirst({ where: eq(sectors.name, name) });

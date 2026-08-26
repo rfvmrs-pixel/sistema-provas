@@ -14,18 +14,42 @@ export async function requireAdmin(): Promise<
   return { ok: true, admin };
 }
 
-// Admin geral (sectorId null) só passa por aqui. Use nas rotas que só fazem
-// sentido para quem gerencia todos os contratos (ex: criar contrato + gestor).
+// Admin geral (role "admin") só passa por aqui. Use nas rotas que só fazem
+// sentido para quem gerencia todos os contratos (ex: criar contrato + gestor,
+// criar/gerenciar contas de Diretoria). Diretoria NÃO passa por aqui mesmo
+// enxergando todos os contratos, porque ela é só leitura.
 export async function requireSuperAdmin(): Promise<
   { ok: true; admin: AdminSessionData } | { ok: false; response: NextResponse }
 > {
   const guard = await requireAdmin();
   if (!guard.ok) return guard;
-  if (guard.admin.sectorId !== null) {
+  if (guard.admin.role !== "admin") {
     return {
       ok: false,
       response: NextResponse.json(
         { error: "Só o admin geral pode fazer isso." },
+        { status: 403 },
+      ),
+    };
+  }
+  return guard;
+}
+
+// Bloqueia contas "diretoria" (só leitura) em qualquer rota de escrita
+// (POST/PATCH/DELETE). Admin geral e gestor de contrato passam normalmente —
+// a checagem de qual Contrato cada um pode mexer continua com
+// canAccessSector. Use isso no lugar de requireAdmin() em todo handler que
+// cria, edita ou exclui algo.
+export async function requireEditor(): Promise<
+  { ok: true; admin: AdminSessionData } | { ok: false; response: NextResponse }
+> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard;
+  if (guard.admin.role === "diretoria") {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Sua conta é somente leitura (Diretoria) — essa ação não é permitida." },
         { status: 403 },
       ),
     };

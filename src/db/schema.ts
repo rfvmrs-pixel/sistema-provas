@@ -20,13 +20,20 @@ export const sectors = pgTable("sectors", {
 });
 
 // ---------- Admins ----------
-// sectorId = null  -> admin geral (super admin), enxerga e gerencia todos os contratos.
-// sectorId = X     -> gestor do contrato X, só enxerga/gerencia o próprio contrato (Setor).
+// sectorId = null  -> enxerga todos os Contratos. role decide o que pode FAZER:
+//   role "admin"     -> admin geral: enxerga e gerencia (cria/edita/exclui) tudo,
+//                       inclusive Contratos e contas de gestor/diretoria.
+//   role "diretoria" -> mesma visão de todos os Contratos e estatísticas da
+//                       empresa, mas SÓ VISUALIZA — todo endpoint de escrita
+//                       (requireEditor) bloqueia esse role.
+// sectorId = X, role "gestor" -> só enxerga/gerencia o próprio contrato (Setor),
+//                       com permissão de escrita normal dentro dele.
 export const admins = pgTable("admins", {
   id: serial("id").primaryKey(),
   username: varchar("username", { length: 100 }).notNull().unique(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   sectorId: integer("sector_id").references(() => sectors.id, { onDelete: "cascade" }),
+  role: varchar("role", { length: 20 }).default("gestor").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

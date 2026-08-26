@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, sectors, roles } from "@/db/schema";
-import { requireAdmin, canAccessSector } from "@/lib/requireAdmin";
+import { requireAdmin, requireEditor, canAccessSector } from "@/lib/requireAdmin";
 import { hashPassword } from "@/lib/password";
 
 export async function GET() {
@@ -32,7 +32,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requireEditor();
   if (!guard.ok) return guard.response;
 
   const body = await request.json().catch(() => null);

@@ -30,11 +30,14 @@ export async function POST(request: NextRequest) {
     sectorName = sector?.name ?? null;
   }
 
+  const role = admin.role === "admin" || admin.role === "diretoria" ? admin.role : "gestor";
+
   await createAdminSession({
     adminId: admin.id,
     username: admin.username,
     sectorId: admin.sectorId,
     sectorName,
+    role,
   });
-  return NextResponse.json({ ok: true, sectorId: admin.sectorId, sectorName });
+  return NextResponse.json({ ok: true, sectorId: admin.sectorId, sectorName, role });
 }

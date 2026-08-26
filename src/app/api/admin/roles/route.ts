@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { asc } from "drizzle-orm";
 import { db } from "@/db";
 import { roles } from "@/db/schema";
-import { requireAdmin } from "@/lib/requireAdmin";
+import { requireAdmin, requireEditor } from "@/lib/requireAdmin";
 
 export async function GET() {
   const guard = await requireAdmin();
@@ -13,7 +13,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requireEditor();
   if (!guard.ok) return guard.response;
 
   const body = await request.json().catch(() => null);

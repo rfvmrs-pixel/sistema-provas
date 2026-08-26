@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { exams, questions, attempts, sectors, roles, documents } from "@/db/schema";
-import { requireAdmin, canAccessSector } from "@/lib/requireAdmin";
+import { requireAdmin, requireEditor, canAccessSector } from "@/lib/requireAdmin";
 import { generateExamFromText, type DocumentType } from "@/lib/ai";
 
 export const maxDuration = 120;
@@ -53,7 +53,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requireEditor();
   if (!guard.ok) return guard.response;
 
   const body = await request.json().catch(() => null);

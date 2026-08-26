@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, sectors, exams } from "@/db/schema";
-import { requireAdmin, canAccessSector } from "@/lib/requireAdmin";
+import { requireAdmin, requireEditor, canAccessSector } from "@/lib/requireAdmin";
 import { extractPdfText } from "@/lib/pdf";
 
 export const maxDuration = 60;
@@ -39,7 +39,7 @@ export async function GET() {
 // POST: sobe um novo PDF pra biblioteca. Só pede o Contrato — Função e Tipo
 // (IT/APR) ficam pra quando forem gerar a prova a partir dele.
 export async function POST(request: NextRequest) {
-  const guard = await requireAdmin();
+  const guard = await requireEditor();
   if (!guard.ok) return guard.response;
 
   const form = await request.formData().catch(() => null);

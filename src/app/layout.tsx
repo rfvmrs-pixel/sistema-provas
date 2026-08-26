@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Sistema de Provas",
-  description: "Provas online geradas por IA a partir de PDFs de treinamento, com histórico de desempenho por setor e função.",
+  title: "Triunfo Skill - Avaliação de Competências Operacionais",
+  description:
+    "Triunfo Skill: avaliação de competências operacionais por Contrato, gerada por IA a partir de IT e APR, com histórico de desempenho por Contrato e Função.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

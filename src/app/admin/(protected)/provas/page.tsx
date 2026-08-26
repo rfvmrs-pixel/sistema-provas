@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useIsReadOnlyAdmin } from "../AdminRoleContext";
 
 type Sector = { id: number; name: string };
 type Role = { id: number; name: string };
@@ -39,6 +40,7 @@ function formatSize(bytes: number) {
 }
 
 export default function ProvasPage() {
+  const isReadOnly = useIsReadOnlyAdmin();
   const [exams, setExams] = useState<Exam[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
@@ -274,7 +276,7 @@ export default function ProvasPage() {
               </select>
             </div>
             <button
-              disabled={uploading || files.length === 0 || !uploadSectorId}
+              disabled={isReadOnly || uploading || files.length === 0 || !uploadSectorId}
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
             >
               {uploading
@@ -317,12 +319,14 @@ export default function ProvasPage() {
                         {doc.examCount === 1 ? "prova gerada" : "provas geradas"}
                       </p>
                     </div>
-                    <button
-                      onClick={() => handleDeleteDocument(doc)}
-                      className="shrink-0 text-red-600 hover:underline"
-                    >
-                      excluir
-                    </button>
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => handleDeleteDocument(doc)}
+                        className="shrink-0 text-red-600 hover:underline"
+                      >
+                        excluir
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -397,7 +401,7 @@ export default function ProvasPage() {
               </select>
             </div>
             <button
-              disabled={generating || !documentId || !roleId}
+              disabled={isReadOnly || generating || !documentId || !roleId}
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
             >
               {generating ? `Gerando prova com IA (${numQuestions} questões)...` : "Gerar prova"}
@@ -467,7 +471,8 @@ export default function ProvasPage() {
                   <td className="px-5 py-3">
                     <button
                       onClick={() => toggleActive(exam)}
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      disabled={isReadOnly}
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium disabled:cursor-default ${
                         exam.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
                       }`}
                     >
@@ -475,9 +480,11 @@ export default function ProvasPage() {
                     </button>
                   </td>
                   <td className="px-5 py-3 text-right text-xs">
-                    <button onClick={() => handleDelete(exam)} className="text-red-600 hover:underline">
-                      excluir
-                    </button>
+                    {!isReadOnly && (
+                      <button onClick={() => handleDelete(exam)} className="text-red-600 hover:underline">
+                        excluir
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))

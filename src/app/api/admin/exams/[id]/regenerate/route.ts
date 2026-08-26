@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { exams, questions, roles, documents } from "@/db/schema";
-import { requireAdmin, canAccessSector } from "@/lib/requireAdmin";
+import { requireEditor, canAccessSector } from "@/lib/requireAdmin";
 import { generateExamFromText, type DocumentType } from "@/lib/ai";
 
 export const maxDuration = 120;
@@ -16,7 +16,7 @@ const ALLOWED_QUESTION_COUNTS = [10, 15];
 // do documento escolhido. Por padrão mantém a mesma quantidade de questões
 // que a prova já tinha; o admin pode enviar numQuestions para trocar (10 ou 15).
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const guard = await requireAdmin();
+  const guard = await requireEditor();
   if (!guard.ok) return guard.response;
 
   const { id } = await ctx.params;
