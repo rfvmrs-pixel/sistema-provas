@@ -42,6 +42,7 @@ type Attempt = {
 };
 type Employee = { id: number; name: string; active: boolean; sectorId: number; roleId: number };
 type GeneratedCredential = { employeeId: number; employeeName: string; code: string };
+type LibraryDocument = { id: number; fileName: string; sectorId: number; sectorName: string };
 
 const QUESTION_COUNT_OPTIONS = [10, 15];
 
@@ -57,7 +58,8 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
   const [sectorId, setSectorId] = useState("");
   const [roleId, setRoleId] = useState("");
   const [savingLink, setSavingLink] = useState(false);
-  const [newFile, setNewFile] = useState<File | null>(null);
+  const [documents, setDocuments] = useState<LibraryDocument[]>([]);
+  const [regenDocumentId, setRegenDocumentId] = useState("");
   const [regenNumQuestions, setRegenNumQuestions] = useState(15);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,17 +71,19 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
 
   async function load() {
     setLoading(true);
-    const [examRes, secRes, roleRes, empRes] = await Promise.all([
+    const [examRes, secRes, roleRes, empRes, docRes] = await Promise.all([
       fetch(`/api/admin/exams/${id}`),
       fetch("/api/admin/sectors"),
       fetch("/api/admin/roles"),
       fetch("/api/admin/employees"),
+      fetch("/api/admin/documents"),
     ]);
-    const [data, secData, roleData, empData] = await Promise.all([
+    const [data, secData, roleData, empData, docData] = await Promise.all([
       examRes.json(),
       secRes.json(),
       roleRes.json(),
       empRes.json(),
+      docRes.json(),
     ]);
     setExam(data.exam);
     setQuestions(data.questions ?? []);
@@ -87,6 +91,7 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
     setSectors(secData.sectors ?? []);
     setRoles(roleData.roles ?? []);
     setEmployees(empData.employees ?? []);
+    setDocuments(docData.documents ?? []);
     if (data.exam) {
       setSectorId(String(data.exam.sectorId));
       setRoleId(String(data.exam.roleId));
@@ -122,22 +127,21 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
 
   async function handleRegenerate(e: React.FormEvent) {
     e.preventDefault();
-    if (!newFile) return;
+    if (!regenDocumentId) return;
     setRegenerating(true);
     setError(null);
     try {
-      const form = new FormData();
-      form.append("file", newFile);
-      form.append("numQuestions", String(regenNumQuestions));
-      const res = await fetch(`/api/admin/exams/${id}/regenerate`, { method: "POST", body: form });
+      const res = await fetch(`/api/admin/exams/${id}/regenerate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId: Number(regenDocumentId), numQuestions: regenNumQuestions }),
+      });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Falha ao regenerar a prova.");
         return;
       }
-      setNewFile(null);
-      (document.getElementById("regen-input") as HTMLInputElement | null)?.value &&
-        ((document.getElementById("regen-input") as HTMLInputElement).value = "");
+      setRegenDocumentId("");
       load();
     } finally {
       setRegenerating(false);
@@ -243,19 +247,35 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Atualizar a partir de um novo PDF</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Regerar a partir da biblioteca</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Se a IT ou APR mudou, envie a versão nova aqui. As questões são regeneradas
-            automaticamente; Contrato, Função e o histórico de tentativas continuam os mesmos.
+            Se a IT/APR mudou (ou quer trocar a quantidade de questões), escolha um PDF da
+            biblioteca do mesmo Contrato. As questões são regeneradas automaticamente; Contrato,
+            Função e o histórico de tentativas continuam os mesmos.
           </p>
           <form onSubmit={handleRegenerate} className="mt-3 space-y-3">
-            <input
-              id="regen-input"
-              type="file"
-              accept="application/pdf"
-              onChange={(e) => setNewFile(e.target.files?.[0] ?? null)}
-              className="w-full text-sm"
-            />
+            <div>
+              <label className="block text-xs font-medium text-slate-700">PDF da biblioteca</label>
+              <select
+                value={regenDocumentId}
+                onChange={(e) => setRegenDocumentId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              >
+                <option value="">Selecione...</option>
+                {documents
+                  .filter((d) => d.sectorId === exam.sectorId)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.fileName}
+                    </option>
+                  ))}
+              </select>
+              {documents.filter((d) => d.sectorId === exam.sectorId).length === 0 && (
+                <p className="mt-1 text-xs text-slate-400">
+                  Nenhum PDF salvo ainda para este Contrato — envie um em Provas primeiro.
+                </p>
+              )}
+            </div>
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <label className="block text-xs font-medium text-slate-700">Quantidade de questões</label>
@@ -272,7 +292,7 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
                 </select>
               </div>
               <button
-                disabled={regenerating || !newFile}
+                disabled={regenerating || !regenDocumentId}
                 className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
               >
                 {regenerating ? "Regenerando..." : "Regenerar prova"}

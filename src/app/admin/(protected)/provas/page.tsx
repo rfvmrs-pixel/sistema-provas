@@ -6,6 +6,15 @@ import Link from "next/link";
 type Sector = { id: number; name: string };
 type Role = { id: number; name: string };
 type DocumentType = "IT" | "APR";
+type Document = {
+  id: number;
+  fileName: string;
+  fileSize: number;
+  uploadedAt: string;
+  sectorId: number;
+  sectorName: string;
+  examCount: number;
+};
 type Exam = {
   id: number;
   title: string;
@@ -24,37 +33,53 @@ type Exam = {
 
 const QUESTION_COUNT_OPTIONS = [10, 15];
 
+function formatSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function ProvasPage() {
   const [exams, setExams] = useState<Exam[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  // Upload pra biblioteca
   const [file, setFile] = useState<File | null>(null);
-  const [sectorId, setSectorId] = useState("");
+  const [uploadSectorId, setUploadSectorId] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Gerar prova a partir de um PDF já salvo
+  const [documentId, setDocumentId] = useState("");
   const [roleId, setRoleId] = useState("");
   const [documentType, setDocumentType] = useState<DocumentType>("IT");
   const [numQuestions, setNumQuestions] = useState(15);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
-    const [examRes, secRes, roleRes] = await Promise.all([
+    const [examRes, docRes, secRes, roleRes] = await Promise.all([
       fetch("/api/admin/exams"),
+      fetch("/api/admin/documents"),
       fetch("/api/admin/sectors"),
       fetch("/api/admin/roles"),
     ]);
-    const [examData, secData, roleData] = await Promise.all([
+    const [examData, docData, secData, roleData] = await Promise.all([
       examRes.json(),
+      docRes.json(),
       secRes.json(),
       roleRes.json(),
     ]);
     setExams(examData.exams ?? []);
+    setDocuments(docData.documents ?? []);
     const sectorList: Sector[] = secData.sectors ?? [];
     setSectors(sectorList);
     // Gestor de contrato só recebe o próprio setor aqui — pré-seleciona e o
     // <select> vira apenas informativo (disabled) mais abaixo.
-    if (sectorList.length === 1) setSectorId(String(sectorList[0].id));
+    if (sectorList.length === 1) setUploadSectorId(String(sectorList[0].id));
     setRoles(roleData.roles ?? []);
     setLoading(false);
   }
@@ -65,29 +90,60 @@ export default function ProvasPage() {
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || !sectorId || !roleId) return;
-    setError(null);
+    if (!file || !uploadSectorId) return;
+    setUploadError(null);
     setUploading(true);
     try {
       const form = new FormData();
       form.append("file", file);
-      form.append("sectorId", sectorId);
-      form.append("roleId", roleId);
-      form.append("documentType", documentType);
-      form.append("numQuestions", String(numQuestions));
-      const res = await fetch("/api/admin/exams", { method: "POST", body: form });
+      form.append("sectorId", uploadSectorId);
+      const res = await fetch("/api/admin/documents", { method: "POST", body: form });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Falha ao gerar a prova.");
+        setUploadError(data.error || "Falha ao enviar o PDF.");
         return;
       }
       setFile(null);
-      setRoleId("");
       (document.getElementById("pdf-input") as HTMLInputElement | null)?.value &&
         ((document.getElementById("pdf-input") as HTMLInputElement).value = "");
       load();
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleDeleteDocument(doc: Document) {
+    if (
+      !confirm(
+        `Excluir "${doc.fileName}" da biblioteca? As provas já geradas a partir dele continuam existindo.`,
+      )
+    )
+      return;
+    await fetch(`/api/admin/documents/${doc.id}`, { method: "DELETE" });
+    load();
+  }
+
+  async function handleGenerate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!documentId || !roleId) return;
+    setGenerateError(null);
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/admin/exams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId: Number(documentId), roleId: Number(roleId), documentType, numQuestions }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setGenerateError(data.error || "Falha ao gerar a prova.");
+        return;
+      }
+      setDocumentId("");
+      setRoleId("");
+      load();
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -111,92 +167,172 @@ export default function ProvasPage() {
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Provas</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Envie o PDF de uma IT (Instrução de Trabalho) ou APR (Análise Preliminar de Risco) e a
-          IA gera automaticamente uma prova de múltipla escolha, vinculada a um Contrato e uma
-          Função. Só funcionários desse Contrato e Função veem a prova.
+          Envie o PDF de uma IT ou APR uma vez só — ele fica salvo na biblioteca do Contrato. Depois
+          é só escolher o PDF já salvo, a Função, o Tipo e a quantidade de questões pra gerar (ou
+          regerar) quantas provas quiser a partir dele.
         </p>
       </div>
 
-      <form onSubmit={handleUpload} className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="sm:col-span-3">
-            <label className="block text-sm font-medium text-slate-700">Arquivo PDF (IT/APR)</label>
-            <input
-              id="pdf-input"
-              type="file"
-              accept="application/pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="mt-1 w-full text-sm"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Contrato</label>
-            <select
-              value={sectorId}
-              onChange={(e) => setSectorId(e.target.value)}
-              disabled={sectors.length === 1}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500"
-              required
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">1. Biblioteca de PDFs</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Suba o PDF da IT/APR e identifique só o Contrato. O arquivo fica salvo e disponível pra
+            gerar provas depois.
+          </p>
+          <form onSubmit={handleUpload} className="mt-3 space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Arquivo PDF</label>
+              <input
+                id="pdf-input"
+                type="file"
+                accept="application/pdf"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="mt-1 w-full text-sm"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Contrato</label>
+              <select
+                value={uploadSectorId}
+                onChange={(e) => setUploadSectorId(e.target.value)}
+                disabled={sectors.length === 1}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                required
+              >
+                <option value="">Selecione...</option>
+                {sectors.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              disabled={uploading || !file || !uploadSectorId}
+              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
             >
-              <option value="">Selecione...</option>
-              {sectors.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              {uploading ? "Enviando..." : "Salvar PDF na biblioteca"}
+            </button>
+            {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
+          </form>
+
+          <div className="mt-5 border-t border-slate-100 pt-4">
+            <h3 className="text-xs font-semibold text-slate-700">PDFs salvos</h3>
+            {documents.length === 0 ? (
+              <p className="mt-2 text-xs text-slate-400">Nenhum PDF salvo ainda.</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {documents.map((doc) => (
+                  <li
+                    key={doc.id}
+                    className="flex items-center justify-between gap-2 rounded-md border border-slate-100 px-3 py-2 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <a
+                        href={`/api/admin/documents/${doc.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block truncate font-medium text-slate-800 hover:underline"
+                        title={doc.fileName}
+                      >
+                        {doc.fileName}
+                      </a>
+                      <p className="text-slate-400">
+                        {doc.sectorName} · {formatSize(doc.fileSize)} · {doc.examCount}{" "}
+                        {doc.examCount === 1 ? "prova gerada" : "provas geradas"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteDocument(doc)}
+                      className="shrink-0 text-red-600 hover:underline"
+                    >
+                      excluir
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Função</label>
-            <select
-              value={roleId}
-              onChange={(e) => setRoleId(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-              required
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">2. Gerar prova</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Escolha um PDF já salvo, a Função e o Tipo de documento. A IA gera automaticamente uma
+            prova de múltipla escolha vinculada a esse Contrato e Função.
+          </p>
+          <form onSubmit={handleGenerate} className="mt-3 space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700">PDF da biblioteca</label>
+              <select
+                value={documentId}
+                onChange={(e) => setDocumentId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                required
+              >
+                <option value="">Selecione...</option>
+                {documents.map((doc) => (
+                  <option key={doc.id} value={doc.id}>
+                    {doc.fileName} ({doc.sectorName})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Função</label>
+                <select
+                  value={roleId}
+                  onChange={(e) => setRoleId(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                  required
+                >
+                  <option value="">Selecione...</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700">Tipo de documento</label>
+                <select
+                  value={documentType}
+                  onChange={(e) => setDocumentType(e.target.value as DocumentType)}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                >
+                  <option value="IT">IT (Instrução de Trabalho)</option>
+                  <option value="APR">APR (Análise Preliminar de Risco)</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Quantidade de questões</label>
+              <select
+                value={numQuestions}
+                onChange={(e) => setNumQuestions(Number(e.target.value))}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              >
+                {QUESTION_COUNT_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n} questões
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              disabled={generating || !documentId || !roleId}
+              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
             >
-              <option value="">Selecione...</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Tipo de documento</label>
-            <select
-              value={documentType}
-              onChange={(e) => setDocumentType(e.target.value as DocumentType)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-            >
-              <option value="IT">IT (Instrução de Trabalho)</option>
-              <option value="APR">APR (Análise Preliminar de Risco)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Quantidade de questões</label>
-            <select
-              value={numQuestions}
-              onChange={(e) => setNumQuestions(Number(e.target.value))}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-            >
-              {QUESTION_COUNT_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n} questões
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <button
-          disabled={uploading || !file || !sectorId || !roleId}
-          className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-        >
-          {uploading ? `Gerando prova com IA (${numQuestions} questões)...` : "Gerar prova"}
-        </button>
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-      </form>
+              {generating ? `Gerando prova com IA (${numQuestions} questões)...` : "Gerar prova"}
+            </button>
+            {generateError && <p className="text-sm text-red-600">{generateError}</p>}
+          </form>
+        </section>
+      </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">

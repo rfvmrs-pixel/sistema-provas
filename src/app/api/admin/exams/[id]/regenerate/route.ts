@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { exams, questions, roles } from "@/db/schema";
+import { exams, questions, roles, documents } from "@/db/schema";
 import { requireAdmin, canAccessSector } from "@/lib/requireAdmin";
-import { extractPdfText } from "@/lib/pdf";
 import { generateExamFromText, type DocumentType } from "@/lib/ai";
 
 export const maxDuration = 120;
 
 const ALLOWED_QUESTION_COUNTS = [10, 15];
 
-// Quando a IT/APR de origem muda, o admin sobe a versão nova do PDF aqui.
+// Quando a IT/APR de origem muda (ou quer trocar a quantidade de questões),
+// o admin escolhe um PDF da biblioteca (do mesmo Contrato da prova) aqui.
 // A prova (id, Setor, Função, tipo de documento, histórico de tentativas)
 // continua a mesma — só as questões são substituídas pelas geradas a partir
-// do novo conteúdo. Por padrão mantém a mesma quantidade de questões que a
-// prova já tinha; o admin pode enviar numQuestions para trocar (10 ou 15).
+// do documento escolhido. Por padrão mantém a mesma quantidade de questões
+// que a prova já tinha; o admin pode enviar numQuestions para trocar (10 ou 15).
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -30,24 +30,30 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
   const role = await db.query.roles.findFirst({ where: eq(roles.id, exam.roleId) });
 
-  const form = await request.formData().catch(() => null);
-  if (!form) {
-    return NextResponse.json({ error: "Envio inválido, esperado multipart/form-data." }, { status: 400 });
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    return NextResponse.json({ error: "Envio inválido, esperado JSON." }, { status: 400 });
   }
 
-  const file = form.get("file");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Nenhum arquivo PDF enviado." }, { status: 400 });
+  const documentId = Number(body.documentId);
+  if (!documentId) {
+    return NextResponse.json({ error: "Selecione um PDF da biblioteca." }, { status: 400 });
   }
-  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-    return NextResponse.json({ error: "O arquivo precisa ser um PDF." }, { status: 400 });
+
+  const document = await db.query.documents.findFirst({ where: eq(documents.id, documentId) });
+  if (!document) return NextResponse.json({ error: "Documento não encontrado na biblioteca." }, { status: 404 });
+  if (document.sectorId !== exam.sectorId) {
+    return NextResponse.json(
+      { error: "Escolha um PDF do mesmo Contrato desta prova." },
+      { status: 400 },
+    );
   }
 
   const [{ count: currentQuestionCount }] = await db
     .select({ count: sql<number>`count(*)`.mapWith(Number) })
     .from(questions)
     .where(eq(questions.examId, examId));
-  const numQuestionsRaw = Number(form.get("numQuestions"));
+  const numQuestionsRaw = Number(body.numQuestions);
   const numQuestions = ALLOWED_QUESTION_COUNTS.includes(numQuestionsRaw)
     ? numQuestionsRaw
     : ALLOWED_QUESTION_COUNTS.includes(currentQuestionCount)
@@ -56,22 +62,11 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
   const documentType = (exam.documentType === "APR" ? "APR" : "IT") as DocumentType;
 
-  let text: string;
-  try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    text = await extractPdfText(buffer);
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Falha ao ler o PDF." },
-      { status: 400 },
-    );
-  }
-
   let generated;
   try {
-    generated = await generateExamFromText(text, {
+    generated = await generateExamFromText(document.extractedText, {
       numQuestions,
-      sourceFileName: file.name,
+      sourceFileName: document.fileName,
       documentType,
       roleName: role?.name,
     });
@@ -101,9 +96,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const [updated] = await db
     .update(exams)
     .set({
-      title: generated.title || file.name,
-      sourceFileName: file.name,
+      title: generated.title || document.fileName,
+      sourceFileName: document.fileName,
       summary: generated.summary,
+      documentId: document.id,
     })
     .where(eq(exams.id, examId))
     .returning();

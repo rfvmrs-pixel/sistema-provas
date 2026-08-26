@@ -73,6 +73,30 @@ export const employees = pgTable(
   ],
 );
 
+// ---------- Biblioteca de documentos (PDFs de IT/APR) ----------
+// O gestor sobe o PDF uma vez, identificando só o Contrato. Fica salvo aqui
+// (texto extraído + arquivo original em base64) e pode ser reaproveitado
+// depois pra gerar quantas provas quiser (funções e quantidades diferentes),
+// sem precisar subir o arquivo de novo. Função e Tipo (IT/APR) só são
+// escolhidos na hora de gerar a prova a partir do documento.
+export const documents = pgTable(
+  "documents",
+  {
+    id: serial("id").primaryKey(),
+    sectorId: integer("sector_id")
+      .notNull()
+      .references(() => sectors.id, { onDelete: "cascade" }),
+    fileName: varchar("file_name", { length: 300 }).notNull(),
+    extractedText: text("extracted_text").notNull(),
+    // Arquivo original em base64, pra manter o PDF de fato "salvo no sistema"
+    // (não só o texto extraído) e permitir baixar/conferir depois.
+    fileData: text("file_data").notNull(),
+    fileSize: integer("file_size").notNull(), // bytes do PDF original
+    uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+  },
+  (t) => [index("documents_sector_idx").on(t.sectorId)],
+);
+
 // ---------- Provas ----------
 export const exams = pgTable(
   "exams",
@@ -86,6 +110,9 @@ export const exams = pgTable(
     // Tipo do documento de origem: IT (Instrução de Trabalho) ou APR (Análise
     // Preliminar de Risco). Influencia o prompt de geração das questões.
     documentType: varchar("document_type", { length: 10 }).default("IT").notNull(),
+    // De qual documento da biblioteca essa prova foi gerada (se veio de lá).
+    // set null: apagar o PDF da biblioteca não apaga as provas já geradas.
+    documentId: integer("document_id").references(() => documents.id, { onDelete: "set null" }),
     // Cada prova pertence a exatamente 1 Setor + 1 Função. Funcionário só vê
     // provas do seu próprio Setor E Função (ver /api/employee/exams).
     sectorId: integer("sector_id")
@@ -173,6 +200,12 @@ export const sectorsRelations = relations(sectors, ({ many }) => ({
   employees: many(employees),
   exams: many(exams),
   admins: many(admins),
+  documents: many(documents),
+}));
+
+export const documentsRelations = relations(documents, ({ one, many }) => ({
+  sector: one(sectors, { fields: [documents.sectorId], references: [sectors.id] }),
+  exams: many(exams),
 }));
 
 export const adminsRelations = relations(admins, ({ one }) => ({
@@ -196,6 +229,7 @@ export const examsRelations = relations(exams, ({ one, many }) => ({
   attempts: many(attempts),
   sector: one(sectors, { fields: [exams.sectorId], references: [sectors.id] }),
   role: one(roles, { fields: [exams.roleId], references: [roles.id] }),
+  document: one(documents, { fields: [exams.documentId], references: [documents.id] }),
 }));
 
 export const questionsRelations = relations(questions, ({ one, many }) => ({

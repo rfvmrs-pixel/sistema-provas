@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { exams, questions, attempts, sectors, roles } from "@/db/schema";
+import { exams, questions, attempts, sectors, roles, documents } from "@/db/schema";
 import { requireAdmin, canAccessSector } from "@/lib/requireAdmin";
-import { extractPdfText } from "@/lib/pdf";
 import { generateExamFromText, type DocumentType } from "@/lib/ai";
 
 export const maxDuration = 120;
@@ -14,6 +13,10 @@ const ALLOWED_QUESTION_COUNTS = [10, 15];
 // CRUD de UMA prova específica fica em ./[id]/route.ts. Os dois já estiveram
 // trocados entre si nesse repo (o que quebrava upload de PDF e edição/exclusão
 // de provas) — mantenha essa separação ao editar.
+//
+// A criação de prova NÃO recebe mais um PDF direto: o PDF já foi salvo antes
+// na biblioteca (/api/admin/documents) e aqui só se escolhe qual documento,
+// Função, Tipo (IT/APR) e quantidade de questões usar pra gerar a prova.
 export async function GET() {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -28,6 +31,7 @@ export async function GET() {
       active: exams.active,
       passingScore: exams.passingScore,
       documentType: exams.documentType,
+      documentId: exams.documentId,
       createdAt: exams.createdAt,
       sectorId: exams.sectorId,
       sectorName: sectors.name,
@@ -52,32 +56,28 @@ export async function POST(request: NextRequest) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
-  const form = await request.formData().catch(() => null);
-  if (!form) {
-    return NextResponse.json({ error: "Envio inválido, esperado multipart/form-data." }, { status: 400 });
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    return NextResponse.json({ error: "Envio inválido, esperado JSON." }, { status: 400 });
   }
 
-  const file = form.get("file");
-  const sectorId = Number(form.get("sectorId"));
-  const roleId = Number(form.get("roleId"));
-  const documentTypeRaw = form.get("documentType")?.toString().toUpperCase();
+  const documentId = Number(body.documentId);
+  const roleId = Number(body.roleId);
+  const documentTypeRaw = typeof body.documentType === "string" ? body.documentType.toUpperCase() : "";
   const documentType: DocumentType = documentTypeRaw === "APR" ? "APR" : "IT";
-  const numQuestionsRaw = Number(form.get("numQuestions"));
+  const numQuestionsRaw = Number(body.numQuestions);
   const numQuestions = ALLOWED_QUESTION_COUNTS.includes(numQuestionsRaw) ? numQuestionsRaw : 15;
 
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Nenhum arquivo PDF enviado." }, { status: 400 });
-  }
-  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-    return NextResponse.json({ error: "O arquivo precisa ser um PDF." }, { status: 400 });
-  }
-  if (!sectorId) {
-    return NextResponse.json({ error: "Selecione o Contrato (Setor) desta prova." }, { status: 400 });
+  if (!documentId) {
+    return NextResponse.json({ error: "Selecione um PDF da biblioteca." }, { status: 400 });
   }
   if (!roleId) {
     return NextResponse.json({ error: "Selecione a Função desta prova." }, { status: 400 });
   }
-  if (!canAccessSector(guard.admin, sectorId)) {
+
+  const document = await db.query.documents.findFirst({ where: eq(documents.id, documentId) });
+  if (!document) return NextResponse.json({ error: "Documento não encontrado na biblioteca." }, { status: 404 });
+  if (!canAccessSector(guard.admin, document.sectorId)) {
     return NextResponse.json(
       { error: "Você só pode criar provas para o próprio contrato." },
       { status: 403 },
@@ -85,28 +85,17 @@ export async function POST(request: NextRequest) {
   }
 
   const [sector, role] = await Promise.all([
-    db.query.sectors.findFirst({ where: eq(sectors.id, sectorId) }),
+    db.query.sectors.findFirst({ where: eq(sectors.id, document.sectorId) }),
     db.query.roles.findFirst({ where: eq(roles.id, roleId) }),
   ]);
-  if (!sector) return NextResponse.json({ error: "Contrato (Setor) inválido." }, { status: 400 });
+  if (!sector) return NextResponse.json({ error: "Contrato inválido." }, { status: 400 });
   if (!role) return NextResponse.json({ error: "Função inválida." }, { status: 400 });
-
-  let text: string;
-  try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    text = await extractPdfText(buffer);
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Falha ao ler o PDF." },
-      { status: 400 },
-    );
-  }
 
   let generated;
   try {
-    generated = await generateExamFromText(text, {
+    generated = await generateExamFromText(document.extractedText, {
       numQuestions,
-      sourceFileName: file.name,
+      sourceFileName: document.fileName,
       documentType,
       roleName: role.name,
     });
@@ -120,11 +109,12 @@ export async function POST(request: NextRequest) {
   const [exam] = await db
     .insert(exams)
     .values({
-      title: generated.title || file.name,
-      sourceFileName: file.name,
+      title: generated.title || document.fileName,
+      sourceFileName: document.fileName,
       summary: generated.summary,
       documentType,
-      sectorId,
+      documentId: document.id,
+      sectorId: document.sectorId,
       roleId,
     })
     .returning();
