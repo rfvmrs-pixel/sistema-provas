@@ -8,13 +8,26 @@ import { getContractBranding } from "@/lib/contractBranding";
 
 type Sector = { id: number; name: string };
 
-function ContractTile({ sector, onClick }: { sector: Sector; onClick: () => void }) {
+// Ordem manual dos cartões de Contrato na tela de abertura — os "BR"
+// (Petrobras: ARM RIO/LON1/LON2) ficam juntos, com EQUINOR e SPOT logo ao
+// lado. Quem não está na lista entra depois, na ordem que vier da API.
+const SECTOR_ORDER = ["ARM RIO", "LON1", "LON2", "EQUINOR", "SPOT", "MANUTENÇÃO", "PRIME OCEAN", "TPS"];
+
+function sortSectors(sectors: Sector[]): Sector[] {
+  const rank = (name: string) => {
+    const idx = SECTOR_ORDER.indexOf(name.trim().toUpperCase());
+    return idx === -1 ? SECTOR_ORDER.length : idx;
+  };
+  return [...sectors].sort((a, b) => rank(a.name) - rank(b.name));
+}
+
+function ContractTile({ sector, onClick }: { sector: Sector; onClick: (label: string) => void }) {
   const branding = getContractBranding(sector.name);
 
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => onClick(sector.name)}
       className="group flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-6 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
     >
       <div className="flex h-16 w-full items-center justify-center">
@@ -73,7 +86,7 @@ function ContractTile({ sector, onClick }: { sector: Sector; onClick: () => void
 // página (/admin/login). Clicou num cartão (Contrato, Admin ou Diretoria),
 // aparece esse formulário aqui mesmo; "voltar" retorna pros cartões. Só
 // depois de autenticar de verdade é que navega pra área protegida (/admin).
-function InlineAdminLogin({ onBack }: { onBack: () => void }) {
+function InlineAdminLogin({ onBack, label }: { onBack: () => void; label: string }) {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -126,6 +139,11 @@ function InlineAdminLogin({ onBack }: { onBack: () => void }) {
         />
         <h1 className="mt-3 text-center text-lg font-semibold text-slate-900">Triunfo Skill</h1>
         <p className="mt-1 text-center text-sm text-slate-500">Entre com seu usuário e senha.</p>
+        {label && (
+          <p className="mt-2 text-center text-xs text-slate-400">
+            Acessando: <span className="font-medium text-slate-700">{label}</span>
+          </p>
+        )}
 
         <div className="mt-6 space-y-4">
           <div>
@@ -170,6 +188,14 @@ export default function HomePage() {
   // "" = mostrando os cartões; "login" = mostrando o formulário de
   // usuário/senha (mesma tela, sem navegar pra outra página).
   const [view, setView] = useState<"" | "login">("");
+  // Qual cartão foi clicado — só pra mostrar "Acessando: X" no formulário;
+  // quem realmente define o acesso é a conta (usuário/senha), não isso.
+  const [loginLabel, setLoginLabel] = useState("");
+
+  function openLogin(label: string) {
+    setLoginLabel(label);
+    setView("login");
+  }
 
   useEffect(() => {
     fetch("/api/public/sectors")
@@ -177,6 +203,8 @@ export default function HomePage() {
       .then((data) => setSectors(data.sectors ?? []))
       .finally(() => setLoading(false));
   }, []);
+
+  const sortedSectors = sortSectors(sectors);
 
   return (
     <div className="flex flex-1 flex-col items-center bg-slate-50 px-6 py-14">
@@ -198,7 +226,7 @@ export default function HomePage() {
 
         {view === "login" ? (
           <div className="flex justify-center">
-            <InlineAdminLogin onBack={() => setView("")} />
+            <InlineAdminLogin onBack={() => setView("")} label={loginLabel} />
           </div>
         ) : (
           <>
@@ -214,8 +242,8 @@ export default function HomePage() {
                 ) : sectors.length === 0 ? (
                   <p className="text-sm text-slate-400">Nenhum contrato cadastrado ainda.</p>
                 ) : (
-                  sectors.map((s) => (
-                    <ContractTile key={s.id} sector={s} onClick={() => setView("login")} />
+                  sortedSectors.map((s) => (
+                    <ContractTile key={s.id} sector={s} onClick={openLogin} />
                   ))
                 )}
 
@@ -224,7 +252,7 @@ export default function HomePage() {
                     colaboradores, contas de gestor/Diretoria). */}
                 <button
                   type="button"
-                  onClick={() => setView("login")}
+                  onClick={() => openLogin("Admin")}
                   className="group flex flex-col items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 px-4 py-6 text-center shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800"
                 >
                   <div className="flex h-16 w-full items-center justify-center">
@@ -254,7 +282,7 @@ export default function HomePage() {
                     Superintendência"). */}
                 <button
                   type="button"
-                  onClick={() => setView("login")}
+                  onClick={() => openLogin("Diretoria")}
                   className="group flex flex-col items-center gap-3 rounded-xl border-2 border-slate-300 bg-white px-4 py-6 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-md"
                 >
                   <div className="flex h-16 w-full items-center justify-center">
