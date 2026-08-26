@@ -4,12 +4,10 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getContractBranding, LOGO_VERSION } from "@/lib/contractBranding";
+import { getContractBranding } from "@/lib/contractBranding";
 
-// "?v=" evita que o navegador/otimizador de imagem do Next.js sirva uma logo
-// antiga do cache depois de trocarmos o arquivo em /public/logos.
-const TRIUNFO_MARK = `/logos/triunfo_mark.png?v=${LOGO_VERSION}`;
-const TRIUNFO_FULL = `/logos/triunfo_full.png?v=${LOGO_VERSION}`;
+const TRIUNFO_MARK = "/logos/triunfo_mark.png";
+const TRIUNFO_FULL = "/logos/triunfo_full.png";
 
 type Sector = { id: number; name: string };
 

@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/session";
 import LogoutButton from "./logout-button";
 import { AdminRoleProvider } from "./AdminRoleContext";
-import { LOGO_VERSION } from "@/lib/contractBranding";
 
 const BASE_NAV_ITEMS = [
   { href: "/admin", label: "Painel" },
@@ -37,13 +36,7 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
             <div className="flex items-center gap-8">
               <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <Image
-                  src={`/logos/triunfo_mark.png?v=${LOGO_VERSION}`}
-                  alt=""
-                  width={22}
-                  height={22}
-                  className="shrink-0"
-                />
+                <Image src="/logos/triunfo_mark.png" alt="" width={22} height={22} className="shrink-0" />
                 Triunfo Skill
                 {(admin.label || admin.sectorName) && (
                   <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">

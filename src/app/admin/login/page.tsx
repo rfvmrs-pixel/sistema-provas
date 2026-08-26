@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { LOGO_VERSION } from "@/lib/contractBranding";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -43,7 +42,7 @@ export default function AdminLoginPage() {
         className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm"
       >
         <Image
-          src={`/logos/triunfo_mark.png?v=${LOGO_VERSION}`}
+          src="/logos/triunfo_mark.png"
           alt="Triunfo"
           width={40}
           height={40}
