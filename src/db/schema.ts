@@ -94,11 +94,11 @@ export const employees = pgTable(
 );
 
 // ---------- Biblioteca de documentos (PDFs de IT/APR) ----------
-// O gestor sobe o PDF uma vez, identificando só o Contrato. Fica salvo aqui
-// (texto extraído + arquivo original em base64) e pode ser reaproveitado
-// depois pra gerar quantas provas quiser (funções e quantidades diferentes),
-// sem precisar subir o arquivo de novo. Função e Tipo (IT/APR) só são
-// escolhidos na hora de gerar a prova a partir do documento.
+// O gestor sobe o PDF uma vez, identificando o Contrato e o Tipo (IT/APR) —
+// isso permite filtrar a Biblioteca e, principalmente, filtrar QUAL pdf
+// aparece pra escolher na hora de gerar a prova (ver Provas > Gerar prova:
+// primeiro escolhe o Tipo, depois só os PDFs desse Tipo aparecem). Função
+// continua sendo escolhida só na hora de gerar a prova.
 export const documents = pgTable(
   "documents",
   {
@@ -107,6 +107,9 @@ export const documents = pgTable(
       .notNull()
       .references(() => sectors.id, { onDelete: "cascade" }),
     fileName: varchar("file_name", { length: 300 }).notNull(),
+    // IT (Instrução de Trabalho) ou APR (Análise Preliminar de Risco) —
+    // definido no upload, guia o filtro em Provas > Gerar prova.
+    documentType: varchar("document_type", { length: 10 }).default("IT").notNull(),
     extractedText: text("extracted_text").notNull(),
     // Arquivo original em base64, pra manter o PDF de fato "salvo no sistema"
     // (não só o texto extraído) e permitir baixar/conferir depois.

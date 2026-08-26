@@ -20,6 +20,7 @@ export async function GET() {
     .select({
       id: documents.id,
       fileName: documents.fileName,
+      documentType: documents.documentType,
       fileSize: documents.fileSize,
       uploadedAt: documents.uploadedAt,
       sectorId: documents.sectorId,
@@ -36,8 +37,8 @@ export async function GET() {
   return NextResponse.json({ documents: list });
 }
 
-// POST: sobe um novo PDF pra biblioteca. Só pede o Contrato — Função e Tipo
-// (IT/APR) ficam pra quando forem gerar a prova a partir dele.
+// POST: sobe um novo PDF pra biblioteca. Pede o Contrato e o Tipo (IT/APR) —
+// Função continua ficando pra quando forem gerar a prova a partir dele.
 export async function POST(request: NextRequest) {
   const guard = await requireEditor();
   if (!guard.ok) return guard.response;
@@ -49,6 +50,8 @@ export async function POST(request: NextRequest) {
 
   const file = form.get("file");
   const sectorId = Number(form.get("sectorId"));
+  const documentTypeRaw = form.get("documentType");
+  const documentType = documentTypeRaw === "APR" ? "APR" : "IT";
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Nenhum arquivo PDF enviado." }, { status: 400 });
@@ -89,6 +92,7 @@ export async function POST(request: NextRequest) {
     .values({
       sectorId,
       fileName: file.name,
+      documentType,
       extractedText,
       fileData: buffer.toString("base64"),
       fileSize: file.size,
@@ -96,6 +100,7 @@ export async function POST(request: NextRequest) {
     .returning({
       id: documents.id,
       fileName: documents.fileName,
+      documentType: documents.documentType,
       fileSize: documents.fileSize,
       uploadedAt: documents.uploadedAt,
       sectorId: documents.sectorId,

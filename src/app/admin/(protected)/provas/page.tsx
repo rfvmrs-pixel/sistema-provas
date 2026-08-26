@@ -10,6 +10,7 @@ type DocumentType = "IT" | "APR";
 type Document = {
   id: number;
   fileName: string;
+  documentType: DocumentType;
   fileSize: number;
   uploadedAt: string;
   sectorId: number;
@@ -118,9 +119,11 @@ export default function ProvasPage() {
     load();
   }
 
-  const filteredDocuments = contractFilter
-    ? documents.filter((d) => String(d.sectorId) === contractFilter)
-    : documents;
+  // Tipo filtra primeiro (evita listar PDF de IT quando a intenção é gerar
+  // uma prova de APR, e vice-versa), Contrato filtra em cima disso.
+  const filteredDocuments = documents
+    .filter((d) => d.documentType === documentType)
+    .filter((d) => !contractFilter || String(d.sectorId) === contractFilter);
   const filteredExams = contractFilter
     ? exams.filter((e) => String(e.sectorId) === contractFilter)
     : exams;
@@ -183,6 +186,23 @@ export default function ProvasPage() {
         )}
         <form onSubmit={handleGenerate} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
+            <label className="block text-xs font-medium text-slate-700">Tipo de documento</label>
+            <select
+              value={documentType}
+              onChange={(e) => {
+                // Muda o Tipo primeiro — a lista de PDF abaixo passa a
+                // mostrar só os desse Tipo, então limpa a seleção anterior
+                // pra não ficar um PDF de outro Tipo escondido selecionado.
+                setDocumentType(e.target.value as DocumentType);
+                setDocumentId("");
+              }}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            >
+              <option value="IT">IT (Instrução de Trabalho)</option>
+              <option value="APR">APR (Análise Preliminar de Risco)</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2">
             <label className="block text-xs font-medium text-slate-700">PDF da biblioteca</label>
             <select
               value={documentId}
@@ -215,17 +235,6 @@ export default function ProvasPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-700">Tipo de documento</label>
-            <select
-              value={documentType}
-              onChange={(e) => setDocumentType(e.target.value as DocumentType)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-            >
-              <option value="IT">IT (Instrução de Trabalho)</option>
-              <option value="APR">APR (Análise Preliminar de Risco)</option>
-            </select>
-          </div>
-          <div className="sm:col-span-2">
             <label className="block text-xs font-medium text-slate-700">Quantidade de questões</label>
             <select
               value={numQuestions}

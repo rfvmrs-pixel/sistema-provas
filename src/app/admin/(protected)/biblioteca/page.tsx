@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useIsReadOnlyAdmin } from "../AdminRoleContext";
 
 type Sector = { id: number; name: string };
+type DocumentType = "IT" | "APR";
 type Document = {
   id: number;
   fileName: string;
+  documentType: DocumentType;
   fileSize: number;
   uploadedAt: string;
   sectorId: number;
@@ -30,6 +32,7 @@ export default function BibliotecaPage() {
   // por chamada).
   const [files, setFiles] = useState<File[]>([]);
   const [uploadSectorId, setUploadSectorId] = useState("");
+  const [uploadDocumentType, setUploadDocumentType] = useState<DocumentType>("IT");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(
@@ -39,6 +42,8 @@ export default function BibliotecaPage() {
   // Filtro por Contrato, útil quando há vários Contratos cadastrados.
   // "" = Todos.
   const [contractFilter, setContractFilter] = useState("");
+  // Filtro por Tipo (IT/APR) — combina com o de Contrato. "" = Todos.
+  const [typeFilter, setTypeFilter] = useState<"" | DocumentType>("");
 
   async function load() {
     setLoading(true);
@@ -74,6 +79,7 @@ export default function BibliotecaPage() {
           const form = new FormData();
           form.append("file", f);
           form.append("sectorId", uploadSectorId);
+          form.append("documentType", uploadDocumentType);
           const res = await fetch("/api/admin/documents", { method: "POST", body: form });
           if (!res.ok) {
             const data = await res.json().catch(() => ({}) as { error?: string });
@@ -108,9 +114,9 @@ export default function BibliotecaPage() {
     load();
   }
 
-  const filteredDocuments = contractFilter
-    ? documents.filter((d) => String(d.sectorId) === contractFilter)
-    : documents;
+  const filteredDocuments = documents
+    .filter((d) => !typeFilter || d.documentType === typeFilter)
+    .filter((d) => !contractFilter || String(d.sectorId) === contractFilter);
 
   return (
     <div className="space-y-6">
@@ -121,6 +127,27 @@ export default function BibliotecaPage() {
           ficam guardadas aqui, num lugar só, organizadas por Contrato. Suba o PDF uma vez e depois
           gere (ou regere) quantas provas quiser a partir dele na aba Provas.
         </p>
+      </div>
+
+      {/* Tipo vem antes do Contrato de propósito: filtrar por Tipo primeiro
+          (IT ou APR) é o que a maioria usa pra achar um PDF específico numa
+          lista longa — e é o mesmo filtro que reaparece em Provas > Gerar
+          prova, na mesma ordem. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-slate-500">Tipo:</span>
+        {(["", "IT", "APR"] as const).map((t) => (
+          <button
+            key={t || "todos"}
+            onClick={() => setTypeFilter(t)}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              typeFilter === t
+                ? "bg-slate-900 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            {t === "" ? "Todos" : t === "IT" ? "IT (Instrução de Trabalho)" : "APR (Análise de Risco)"}
+          </button>
+        ))}
       </div>
 
       {sectors.length > 1 && (
@@ -155,11 +182,12 @@ export default function BibliotecaPage() {
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-slate-900">Enviar novo(s) PDF(s)</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Suba um ou vários PDFs de IT/APR de uma vez e identifique só o Contrato (o mesmo pra
-          todos).
+          Suba um ou vários PDFs de uma vez e identifique o Tipo e o Contrato (os mesmos pra
+          todos). O Tipo é o que permite filtrar depois, tanto aqui quanto na hora de gerar a
+          prova.
         </p>
-        <form onSubmit={handleUpload} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px_auto] sm:items-end">
-          <div>
+        <form onSubmit={handleUpload} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
             <label className="block text-xs font-medium text-slate-700">Arquivo(s) PDF</label>
             <input
               id="pdf-input"
@@ -175,6 +203,18 @@ export default function BibliotecaPage() {
                 {files.length === 1 ? "1 arquivo selecionado" : `${files.length} arquivos selecionados`}
               </p>
             )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700">Tipo de documento</label>
+            <select
+              value={uploadDocumentType}
+              onChange={(e) => setUploadDocumentType(e.target.value as DocumentType)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              required
+            >
+              <option value="IT">IT (Instrução de Trabalho)</option>
+              <option value="APR">APR (Análise Preliminar de Risco)</option>
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700">Contrato</label>
@@ -193,16 +233,18 @@ export default function BibliotecaPage() {
               ))}
             </select>
           </div>
-          <button
-            disabled={isReadOnly || uploading || files.length === 0 || !uploadSectorId}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-          >
-            {uploading
-              ? `Enviando ${uploadProgress?.done ?? 0}/${uploadProgress?.total ?? files.length}...`
-              : files.length > 1
-                ? `Salvar ${files.length} PDFs`
-                : "Salvar PDF"}
-          </button>
+          <div className="sm:col-span-2">
+            <button
+              disabled={isReadOnly || uploading || files.length === 0 || !uploadSectorId}
+              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              {uploading
+                ? `Enviando ${uploadProgress?.done ?? 0}/${uploadProgress?.total ?? files.length}...`
+                : files.length > 1
+                  ? `Salvar ${files.length} PDFs`
+                  : "Salvar PDF"}
+            </button>
+          </div>
         </form>
         {uploadError && <p className="mt-2 whitespace-pre-line text-sm text-red-600">{uploadError}</p>}
       </section>
@@ -211,6 +253,7 @@ export default function BibliotecaPage() {
         <div className="flex items-center justify-between px-5 py-3">
           <h2 className="text-sm font-semibold text-slate-900">
             PDFs salvos
+            {typeFilter && ` — ${typeFilter}`}
             {contractFilter && ` — ${sectors.find((s) => String(s.id) === contractFilter)?.name ?? ""}`}
           </h2>
           <span className="text-xs text-slate-400">
@@ -221,22 +264,33 @@ export default function BibliotecaPage() {
           <p className="px-5 pb-5 text-sm text-slate-400">Carregando...</p>
         ) : filteredDocuments.length === 0 ? (
           <p className="px-5 pb-5 text-sm text-slate-400">
-            {documents.length === 0 ? "Nenhum PDF salvo ainda." : "Nenhum PDF salvo para esse Contrato."}
+            {documents.length === 0 ? "Nenhum PDF salvo ainda." : "Nenhum PDF salvo para esse filtro."}
           </p>
         ) : (
           <ul className="divide-y divide-slate-100">
             {filteredDocuments.map((doc) => (
               <li key={doc.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
                 <div className="min-w-0">
-                  <a
-                    href={`/api/admin/documents/${doc.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block truncate font-medium text-slate-800 hover:underline"
-                    title={doc.fileName}
-                  >
-                    {doc.fileName}
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        doc.documentType === "APR"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-sky-100 text-sky-700"
+                      }`}
+                    >
+                      {doc.documentType}
+                    </span>
+                    <a
+                      href={`/api/admin/documents/${doc.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block truncate font-medium text-slate-800 hover:underline"
+                      title={doc.fileName}
+                    >
+                      {doc.fileName}
+                    </a>
+                  </div>
                   <p className="text-xs text-slate-400">
                     {doc.sectorName} · {formatSize(doc.fileSize)} · {doc.examCount}{" "}
                     {doc.examCount === 1 ? "prova gerada" : "provas geradas"}

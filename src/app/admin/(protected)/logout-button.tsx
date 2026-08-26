@@ -7,7 +7,9 @@ export default function LogoutButton() {
 
   async function handleLogout() {
     await fetch("/api/admin/logout", { method: "POST" });
-    router.push("/admin/login");
+    // Depois de sair, volta pra tela de abertura (com as logos dos
+    // Contratos + Admin/Diretoria) — não direto pro /admin/login.
+    router.push("/");
     router.refresh();
   }
 
