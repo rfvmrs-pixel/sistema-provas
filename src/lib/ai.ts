@@ -35,6 +35,18 @@ const DOCUMENT_TYPE_GUIDANCE: Record<DocumentType, string> = {
   APR: "Este documento é uma APR (Análise Preliminar de Risco): identifica perigos, riscos e medidas de controle/EPIs de uma atividade. Priorize questões sobre quais riscos existem em cada etapa da atividade, quais medidas de controle/EPIs são exigidos, e como agir diante de cada risco identificado.",
 };
 
+// ITs e APRs quase sempre têm uma coluna/campo "Responsável" em cada linha
+// (ex.: "Todos", "Operador de Empilhadeira", "TST / Liderança Operacional",
+// "Supervisor"...) indicando quem executa aquele passo ou é dono daquele
+// risco/medida de controle. Quando a prova é gerada PARA uma Função
+// específica, é fundamental respeitar essa coluna: um Operador de
+// Empilhadeira não deve ser cobrado sobre uma responsabilidade que no
+// documento é exclusiva de outra função (ex.: TST/Liderança), mesmo que o
+// trecho apareça no mesmo PDF — só cai fora dessa regra o que estiver
+// marcado como "Todos"/"Todos os envolvidos" (aplica a qualquer função).
+const RESPONSIBLE_ROLE_GUIDANCE = (roleName: string) =>
+  `IMPORTANTE — filtro por Responsável: este documento provavelmente tem, em cada linha/etapa, um campo "Responsável" (ex.: "Todos", "Operador de Empilhadeira", "TST / Liderança Operacional", "Supervisor", etc.) indicando de quem é aquela responsabilidade. Esta prova é para a função "${roleName}". Gere questões APENAS sobre etapas, riscos ou medidas cujo Responsável seja "Todos"/"Todos os envolvidos" (vale pra qualquer função) OU corresponda à função "${roleName}" (mesmo que o nome não seja idêntico, use bom senso pra reconhecer quando é a mesma função). NÃO gere questões cobrando uma responsabilidade que no documento pertence claramente a OUTRA função específica diferente de "${roleName}" — quem faz a prova não deve ser cobrado por decisões ou ações que não são dele. Se o documento não tiver uma coluna de Responsável explícita, use o bom senso para não cobrar responsabilidades de outros cargos.`;
+
 export async function generateExamFromText(
   sourceText: string,
   opts: {
@@ -52,13 +64,19 @@ export async function generateExamFromText(
     model: MODEL,
     max_tokens: 8000,
     system:
-      `Você é um especialista em treinamento corporativo e elaboração de avaliações (provas) de múltipla escolha em português do Brasil, a partir de material de treinamento (manuais, procedimentos, políticas internas de empresas de logística). ${DOCUMENT_TYPE_GUIDANCE[documentType]} Gere questões claras, objetivas, que testem compreensão real do conteúdo (não só decoreba de frases soltas), com exatamente 4 alternativas plausíveis cada, apenas uma correta. Sempre classifique cada questão com um 'topic' curto (2-5 palavras) que identifique o tema/assunto dentro do documento, para permitir análise posterior de quais temas os funcionários têm mais dificuldade.`,
+      `Você é um especialista em treinamento corporativo e elaboração de avaliações (provas) de múltipla escolha em português do Brasil, a partir de material de treinamento (manuais, procedimentos, políticas internas de empresas de logística). ${DOCUMENT_TYPE_GUIDANCE[documentType]} Gere questões claras, objetivas, que testem compreensão real do conteúdo (não só decoreba de frases soltas), com exatamente 4 alternativas plausíveis cada, apenas uma correta. Sempre classifique cada questão com um 'topic' curto (2-5 palavras) que identifique o tema/assunto dentro do documento, para permitir análise posterior de quais temas os funcionários têm mais dificuldade.${
+        opts.roleName ? ` ${RESPONSIBLE_ROLE_GUIDANCE(opts.roleName)}` : ""
+      }`,
     messages: [
       {
         role: "user",
         content: `Gere uma prova de múltipla escolha com exatamente ${numQuestions} questões com base no conteúdo abaixo (extraído de um PDF do tipo ${documentType}${
           opts.sourceFileName ? ` chamado "${opts.sourceFileName}"` : ""
-        }${opts.roleName ? `, destinado à função "${opts.roleName}"` : ""}).\n\nConteúdo:\n"""\n${sourceText}\n"""`,
+        }${opts.roleName ? `, destinado à função "${opts.roleName}"` : ""}).${
+          opts.roleName
+            ? ` Lembre-se: só pergunte sobre responsabilidades de "${opts.roleName}" ou marcadas como "Todos" — nunca sobre responsabilidade exclusiva de outra função.`
+            : ""
+        }\n\nConteúdo:\n"""\n${sourceText}\n"""`,
       },
     ],
     tools: [

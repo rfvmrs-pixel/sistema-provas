@@ -25,13 +25,13 @@ export type ContractBranding =
 // local sem configuração extra em next.config.ts, e isso já causou o site
 // inteiro ficar sem nenhuma logo em produção. Não usar "?v=" de novo aqui.
 const BRANDING_BY_SECTOR: Record<string, ContractBranding> = {
-  EQUINOR: { kind: "client", logoSrc: "/logos/equinor.png", clientName: "Equinor" },
   "PRIME OCEAN": { kind: "client", logoSrc: "/logos/prime_ocean_v2.png", clientName: "Prime Ocean" },
-  // ARM RIO, LON1 e LON2 são todos vinculados à Petrobras: mostram a marca da
-  // Triunfo em destaque (maior) + o logo da Petrobras pequeno, no canto.
+  // ARM RIO, LON1, LON2 (Petrobras) e agora EQUINOR seguem o mesmo padrão:
+  // marca da Triunfo em destaque (maior) + logo do cliente menor, ao lado.
   "ARM RIO": { kind: "combo", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
   LON1: { kind: "combo", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
   LON2: { kind: "combo", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
+  EQUINOR: { kind: "combo", logoSrc: "/logos/equinor_v2.png", clientName: "Equinor" },
 };
 
 export function getContractBranding(sectorName: string): ContractBranding {
