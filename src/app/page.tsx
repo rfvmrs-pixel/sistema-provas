@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getContractBranding } from "@/lib/contractBranding";
+import { getContractBranding, LOGO_VERSION } from "@/lib/contractBranding";
+
+// "?v=" evita que o navegador/otimizador de imagem do Next.js sirva uma logo
+// antiga do cache depois de trocarmos o arquivo em /public/logos.
+const TRIUNFO_MARK = `/logos/triunfo_mark.png?v=${LOGO_VERSION}`;
+const TRIUNFO_FULL = `/logos/triunfo_full.png?v=${LOGO_VERSION}`;
 
 type Sector = { id: number; name: string };
 
@@ -43,7 +48,7 @@ function ContractTile({ sector, onClick }: { sector: Sector; onClick: (label: st
         {branding.kind === "combo" && (
           <div className="flex h-24 w-full items-center justify-center gap-3">
             <Image
-              src="/logos/triunfo_mark.png"
+              src={TRIUNFO_MARK}
               alt="Triunfo"
               width={80}
               height={80}
@@ -60,7 +65,7 @@ function ContractTile({ sector, onClick }: { sector: Sector; onClick: (label: st
         )}
         {branding.kind === "triunfo" && (
           <Image
-            src="/logos/triunfo_mark.png"
+            src={TRIUNFO_MARK}
             alt="Triunfo"
             width={80}
             height={80}
@@ -131,7 +136,7 @@ function InlineAdminLogin({ onBack, label }: { onBack: () => void; label: string
         className="mt-3 rounded-xl border border-slate-200 bg-white p-8 shadow-sm"
       >
         <Image
-          src="/logos/triunfo_mark.png"
+          src={TRIUNFO_MARK}
           alt="Triunfo"
           width={40}
           height={40}
@@ -210,7 +215,7 @@ export default function HomePage() {
     <div className="flex flex-1 flex-col items-center bg-slate-50 px-6 py-14">
       <div className="w-full max-w-4xl text-center">
         <Image
-          src="/logos/triunfo_full.png"
+          src={TRIUNFO_FULL}
           alt="Triunfo Logística"
           width={220}
           height={184}
@@ -274,7 +279,7 @@ export default function HomePage() {
                 >
                   <div className="flex h-16 w-full items-center justify-center">
                     <Image
-                      src="/logos/triunfo_mark.png"
+                      src={TRIUNFO_MARK}
                       alt="Admin"
                       width={52}
                       height={52}
@@ -304,7 +309,7 @@ export default function HomePage() {
                 >
                   <div className="flex h-16 w-full items-center justify-center">
                     <Image
-                      src="/logos/triunfo_mark.png"
+                      src={TRIUNFO_MARK}
                       alt="Diretoria"
                       width={52}
                       height={52}

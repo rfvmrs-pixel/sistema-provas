@@ -7,6 +7,13 @@ const nextConfig: NextConfig = {
   // Node require() it directly from node_modules, where the worker file
   // actually lives, instead of through Next's server bundle.
   serverExternalPackages: ["pdf-parse"],
+  images: {
+    // Permite "?v=..." nas logos em /public/logos (ver LOGO_VERSION em
+    // contractBranding.ts) — sem isso o Next recusa otimizar a imagem. O "*"
+    // no valor de "search" cobre qualquer versão, então não precisa editar
+    // aqui de novo quando LOGO_VERSION mudar.
+    localPatterns: [{ pathname: "/logos/**", search: "?v=*" }],
+  },
 };
 
 export default nextConfig;
