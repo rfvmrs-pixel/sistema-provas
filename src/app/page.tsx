@@ -84,16 +84,16 @@ export default function HomePage() {
         <Image
           src="/logos/triunfo_full.png"
           alt="Triunfo Logística"
-          width={160}
-          height={134}
-          className="mx-auto h-24 w-auto"
+          width={220}
+          height={184}
+          className="mx-auto h-36 w-auto"
           priority
         />
-        <h1 className="mt-4 text-2xl font-semibold text-slate-900">Triunfo Skill</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Sistema de avaliação de competências operacionais — provas de múltipla escolha geradas a
-          partir de IT (Instrução de Trabalho) e APR (Análise Preliminar de Risco), organizadas por
-          Contrato e Função.
+        <h1 className="mt-5 text-3xl font-semibold text-slate-900">Triunfo Skill</h1>
+        <p className="mt-1 text-base font-medium text-slate-600">Avaliação de Competências Operacionais</p>
+        <p className="mt-3 text-sm text-slate-500">
+          Provas de múltipla escolha geradas a partir de IT (Instrução de Trabalho) e APR (Análise
+          Preliminar de Risco), organizadas por Contrato e Função.
         </p>
 
         <div className="mt-10 text-left">

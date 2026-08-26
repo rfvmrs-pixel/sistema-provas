@@ -7,6 +7,7 @@ import { AdminRoleProvider } from "./AdminRoleContext";
 
 const BASE_NAV_ITEMS = [
   { href: "/admin", label: "Painel" },
+  { href: "/admin/biblioteca", label: "Biblioteca" },
   { href: "/admin/provas", label: "Provas" },
   { href: "/admin/funcionarios", label: "Funcionários" },
   { href: "/admin/funcoes", label: "Funções" },

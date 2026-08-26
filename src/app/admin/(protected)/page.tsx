@@ -4,7 +4,12 @@ import {
   getEmployeeSummary,
   getTopicSummary,
   getRecentAttempts,
+  getDocumentTypeSummary,
+  getScoreTrend,
 } from "@/lib/reports";
+import { getAdminSession } from "@/lib/session";
+import { MeterBarList } from "@/components/charts/MeterBar";
+import { TrendLineChart } from "@/components/charts/TrendLineChart";
 
 function ScoreBadge({ value }: { value: number }) {
   const color =
@@ -30,14 +35,28 @@ function Card({ label, value }: { label: string; value: string | number }) {
 }
 
 export default async function AdminDashboardPage() {
-  const [sectorSummary, roleSummary, employeeSummary, topicSummary, recentAttempts] =
-    await Promise.all([
-      getSectorSummary(),
-      getRoleSummary(),
-      getEmployeeSummary(),
-      getTopicSummary(),
-      getRecentAttempts(15),
-    ]);
+  // Gestor de contrato só pode ver os números do próprio Contrato — admin
+  // geral e Diretoria (sectorId null) veem a empresa toda.
+  const admin = await getAdminSession();
+  const sectorId = admin?.sectorId ?? undefined;
+
+  const [
+    sectorSummary,
+    roleSummary,
+    employeeSummary,
+    topicSummary,
+    recentAttempts,
+    documentTypeSummary,
+    scoreTrend,
+  ] = await Promise.all([
+    getSectorSummary(sectorId),
+    getRoleSummary(sectorId),
+    getEmployeeSummary(sectorId),
+    getTopicSummary(sectorId),
+    getRecentAttempts(15, sectorId),
+    getDocumentTypeSummary(sectorId),
+    getScoreTrend(30, sectorId),
+  ]);
 
   const totalAttempts = employeeSummary.reduce((acc, e) => acc + e.attemptCount, 0);
   const evaluated = employeeSummary.filter((e) => e.attemptCount > 0);
@@ -67,6 +86,14 @@ export default async function AdminDashboardPage() {
         <Card label="Média geral" value={`${overallAvg}%`} />
         <Card label="Precisam de treinamento" value={employeesNeedingTraining.length} />
       </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-sm font-semibold text-slate-900">Tendência da média geral</h2>
+        <p className="text-xs text-slate-500">Média de nota por dia, últimos 30 dias.</p>
+        <div className="mt-4">
+          <TrendLineChart points={scoreTrend} />
+        </div>
+      </section>
 
       {(sectorsNeedingTraining.length > 0 ||
         rolesNeedingTraining.length > 0 ||
@@ -116,50 +143,52 @@ export default async function AdminDashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">Desempenho por setor</h2>
-          <table className="mt-3 w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-slate-500">
-                <th className="pb-2">Setor</th>
-                <th className="pb-2">Tentativas</th>
-                <th className="pb-2">Média</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sectorSummary.map((s) => (
-                <tr key={s.id} className="border-t border-slate-100">
-                  <td className="py-2 text-slate-800">{s.name}</td>
-                  <td className="py-2 text-slate-500">{s.attemptCount}</td>
-                  <td className="py-2">
-                    <ScoreBadge value={s.avgScore} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="mt-4">
+            <MeterBarList
+              emptyMessage="Nenhum contrato cadastrado."
+              items={sectorSummary.map((s) => ({
+                id: s.id,
+                label: s.name,
+                value: s.avgScore,
+                sublabel: `${s.attemptCount} ${s.attemptCount === 1 ? "tentativa" : "tentativas"}`,
+              }))}
+            />
+          </div>
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">Desempenho por função</h2>
-          <table className="mt-3 w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-slate-500">
-                <th className="pb-2">Função</th>
-                <th className="pb-2">Tentativas</th>
-                <th className="pb-2">Média</th>
-              </tr>
-            </thead>
-            <tbody>
-              {roleSummary.map((r) => (
-                <tr key={r.id} className="border-t border-slate-100">
-                  <td className="py-2 text-slate-800">{r.name}</td>
-                  <td className="py-2 text-slate-500">{r.attemptCount}</td>
-                  <td className="py-2">
-                    <ScoreBadge value={r.avgScore} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="mt-4">
+            <MeterBarList
+              emptyMessage="Nenhuma função cadastrada."
+              items={roleSummary.map((r) => ({
+                id: r.id,
+                label: r.name,
+                value: r.avgScore,
+                sublabel: `${r.attemptCount} ${r.attemptCount === 1 ? "tentativa" : "tentativas"}`,
+              }))}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">IT x APR</h2>
+          <p className="text-xs text-slate-500">
+            Compara o desempenho em provas de Instrução de Trabalho (IT) com as de Análise
+            Preliminar de Risco (APR) — ajuda a apontar se falta mais conhecimento de processo ou
+            de segurança.
+          </p>
+          <div className="mt-4">
+            <MeterBarList
+              emptyMessage="Ainda sem provas respondidas para comparar."
+              items={documentTypeSummary.map((d) => ({
+                id: d.documentType,
+                label: d.documentType === "APR" ? "APR (Análise Preliminar de Risco)" : "IT (Instrução de Trabalho)",
+                value: d.avgScore,
+                sublabel: `${d.attemptCount} ${d.attemptCount === 1 ? "tentativa" : "tentativas"}`,
+              }))}
+            />
+          </div>
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">

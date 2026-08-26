@@ -1,4 +1,4 @@
-import { and, avg, count, eq, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, avg, count, eq, gte, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { attempts, employees, sectors, roles, answers, questions, exams } from "@/db/schema";
 
@@ -218,6 +218,69 @@ export async function getTopicByRole(sectorId?: number): Promise<TopicByGroupRow
       };
     })
     .sort((a, b) => a.accuracy - b.accuracy);
+}
+
+export type DocumentTypeRow = {
+  documentType: string;
+  avgScore: number;
+  attemptCount: number;
+};
+
+// Compara o desempenho médio em provas de IT (Instrução de Trabalho) x APR
+// (Análise Preliminar de Risco) — ajuda a apontar se o problema está mais no
+// "como fazer" (IT) ou no "quais riscos existem" (APR).
+export async function getDocumentTypeSummary(sectorId?: number): Promise<DocumentTypeRow[]> {
+  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+  const rows = await db
+    .select({
+      documentType: exams.documentType,
+      avgScore: avg(attempts.percentage),
+      attemptCount: count(attempts.id),
+    })
+    .from(attempts)
+    .innerJoin(exams, eq(attempts.examId, exams.id))
+    .innerJoin(employees, eq(attempts.employeeId, employees.id))
+    .where(and(isNotNull(attempts.percentage), scope))
+    .groupBy(exams.documentType)
+    .orderBy(exams.documentType);
+
+  return rows.map((r) => ({
+    documentType: r.documentType,
+    avgScore: round(r.avgScore),
+    attemptCount: Number(r.attemptCount),
+  }));
+}
+
+export type TrendPoint = {
+  date: string; // YYYY-MM-DD
+  avgScore: number;
+  attemptCount: number;
+};
+
+// Média de nota por dia nos últimos `days` dias — pra visualizar se o
+// desempenho geral está melhorando ou piorando ao longo do tempo.
+export async function getScoreTrend(days = 30, sectorId?: number): Promise<TrendPoint[]> {
+  const sinceExpr = sql`now() - (${days}::text || ' days')::interval`;
+  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+  const dateExpr = sql<string>`to_char(${attempts.finishedAt}, 'YYYY-MM-DD')`;
+
+  const rows = await db
+    .select({
+      date: dateExpr,
+      avgScore: avg(attempts.percentage),
+      attemptCount: count(attempts.id),
+    })
+    .from(attempts)
+    .innerJoin(employees, eq(attempts.employeeId, employees.id))
+    .where(and(isNotNull(attempts.percentage), gte(attempts.finishedAt, sinceExpr), scope))
+    .groupBy(dateExpr)
+    .orderBy(dateExpr);
+
+  return rows.map((r) => ({
+    date: r.date,
+    avgScore: round(r.avgScore),
+    attemptCount: Number(r.attemptCount),
+  }));
 }
 
 export async function getAttemptsByExam(examId: number) {
