@@ -6,6 +6,7 @@ import { createEmployeeSession } from "@/lib/session";
 import { hashPassword } from "@/lib/password";
 import { generateLinkToken } from "@/lib/token";
 import { isValidTenureCode } from "@/lib/tenure";
+import { ensureFreshQuestionSet } from "@/lib/attemptLimit";
 
 // Autocadastro público pelo link de aplicação — sem senha. O colaborador
 // informa nome, matrícula e tempo de empresa (Contrato/Função já são fixos,
@@ -83,18 +84,17 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ token:
     }
   }
 
-  // Uma prova aplicada por link é de uma vez só — se essa matrícula já
-  // finalizou essa prova por esse link, não deixa refazer por aqui (o gestor
-  // pode gerar um novo link se precisar reabrir).
-  const alreadyDone = await db.query.attempts.findFirst({
-    where: and(eq(attempts.examLinkId, link.id), eq(attempts.employeeId, employeeId)),
-  });
-  if (alreadyDone?.finishedAt) {
-    return NextResponse.json(
-      { error: "Você já respondeu essa prova. Fale com seu gestor se precisar refazer." },
-      { status: 409 },
-    );
-  }
+  // Limite: no máximo 3 tentativas "oficial" pra esse colaborador (mesmo
+  // nome/matrícula) dentro do mesmo conjunto de perguntas dessa prova. Ao
+  // bater o limite, regenera as questões na hora (outras perguntas, mesma
+  // IT/APR de origem) — ver src/lib/attemptLimit.ts. Isso substitui a antiga
+  // regra de "só pode responder uma vez por link": agora conta contra a
+  // prova/colaborador, não contra o link específico.
+  const fresh = await ensureFreshQuestionSet(exam.id, employeeId);
+  const questionSetVersion = fresh.currentVersion;
+  const currentExam = fresh.regenerated
+    ? ((await db.query.exams.findFirst({ where: eq(exams.id, exam.id) })) ?? exam)
+    : exam;
 
   const examQuestions = await db
     .select({ id: questions.id, text: questions.text, options: questions.options, order: questions.order })
@@ -128,13 +128,14 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ token:
       mode: "oficial",
       sessionLabel: link.label,
       examLinkId: link.id,
+      questionSetVersion,
     })
     .returning();
 
   return NextResponse.json({
     attemptId: attempt.id,
-    examTitle: exam.title,
-    passingScore: exam.passingScore,
+    examTitle: currentExam.title,
+    passingScore: currentExam.passingScore,
     questions: examQuestions,
   });
 }

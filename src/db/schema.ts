@@ -9,6 +9,7 @@ import {
   jsonb,
   uniqueIndex,
   index,
+  date,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -140,6 +141,12 @@ export const exams = pgTable(
     roleId: integer("role_id")
       .notNull()
       .references(() => roles.id, { onDelete: "restrict" }),
+    // Incrementa toda vez que as questões são regeneradas (manual pelo admin,
+    // ou automático depois de 3 tentativas "oficial" do mesmo colaborador —
+    // ver src/lib/attemptLimit.ts). attempts.questionSetVersion guarda com
+    // qual "geração" de perguntas aquela tentativa foi feita, então o limite
+    // de 3 tentativas conta só contra o conjunto de perguntas atual.
+    currentVersion: integer("current_version").default(1).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("exams_sector_role_idx").on(t.sectorId, t.roleId)],
@@ -216,6 +223,10 @@ export const attempts = pgTable(
     // Se essa tentativa veio de um link de aplicação (geral/direcionada) —
     // null quando veio do código de "prova do dia" antigo ou é "simulado".
     examLinkId: integer("exam_link_id").references(() => examLinks.id, { onDelete: "set null" }),
+    // Snapshot de exams.currentVersion no momento em que essa tentativa foi
+    // criada — usado pra contar as 3 tentativas só contra a "geração" atual
+    // de perguntas (uma regeneração zera a contagem pra todo mundo).
+    questionSetVersion: integer("question_set_version").default(1).notNull(),
     startedAt: timestamp("started_at").defaultNow().notNull(),
     finishedAt: timestamp("finished_at"),
     score: integer("score"),
@@ -226,6 +237,28 @@ export const attempts = pgTable(
     index("attempts_exam_idx").on(t.examId),
     index("attempts_employee_idx").on(t.employeeId),
   ],
+);
+
+// ---------- Agenda de aplicação (heatmap do gestor) ----------
+// Planejamento visual: o gestor marca "no dia X vou aplicar a prova de tal
+// IT/APR" pro próprio Contrato. É só um plano/lembrete visto num calendário
+// em heatmap — não dispara nada sozinho (não gera prova nem manda link
+// automaticamente).
+export const examSchedules = pgTable(
+  "exam_schedules",
+  {
+    id: serial("id").primaryKey(),
+    sectorId: integer("sector_id")
+      .notNull()
+      .references(() => sectors.id, { onDelete: "cascade" }),
+    documentId: integer("document_id").references(() => documents.id, { onDelete: "set null" }),
+    // Guarda o nome do documento mesmo se ele for apagado da biblioteca depois.
+    documentLabel: varchar("document_label", { length: 300 }).notNull(),
+    scheduledDate: date("scheduled_date").notNull(),
+    note: varchar("note", { length: 300 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [index("exam_schedules_sector_date_idx").on(t.sectorId, t.scheduledDate)],
 );
 
 // ---------- Respostas ----------
@@ -307,4 +340,9 @@ export const attemptsRelations = relations(attempts, ({ one, many }) => ({
 export const answersRelations = relations(answers, ({ one }) => ({
   attempt: one(attempts, { fields: [answers.attemptId], references: [attempts.id] }),
   question: one(questions, { fields: [answers.questionId], references: [questions.id] }),
+}));
+
+export const examSchedulesRelations = relations(examSchedules, ({ one }) => ({
+  sector: one(sectors, { fields: [examSchedules.sectorId], references: [sectors.id] }),
+  document: one(documents, { fields: [examSchedules.documentId], references: [documents.id] }),
 }));

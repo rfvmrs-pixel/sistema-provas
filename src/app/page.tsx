@@ -110,6 +110,30 @@ export default function HomePage() {
             ) : (
               sectors.map((s) => <ContractTile key={s.id} sector={s} />)
             )}
+
+            {/* Cartão fixo pro admin geral / Diretoria / Superintendência — mesmo
+                grid dos Contratos, cada um entra no próprio perfil por aqui. */}
+            <Link
+              href="/admin/login"
+              className="group flex flex-col items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 px-4 py-6 text-center shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800"
+            >
+              <div className="flex h-16 w-full items-center justify-center">
+                <Image
+                  src="/logos/triunfo_mark.png"
+                  alt="Admin"
+                  width={52}
+                  height={52}
+                  className="h-12 w-12 object-contain brightness-0 invert"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Admin</p>
+                <p className="text-xs text-slate-400">Diretoria / Superintendência</p>
+                <p className="mt-1 text-xs font-medium text-slate-400 group-hover:text-white">
+                  entrar →
+                </p>
+              </div>
+            </Link>
           </div>
         </div>
 
@@ -124,12 +148,6 @@ export default function HomePage() {
             className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
           >
             Fazer uma prova / simulado
-          </Link>
-        </div>
-
-        <div className="mt-6">
-          <Link href="/admin/login" className="text-xs text-slate-400 hover:text-slate-600 hover:underline">
-            Acesso do administrador geral
           </Link>
         </div>
       </div>
