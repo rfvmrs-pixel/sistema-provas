@@ -453,22 +453,24 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
             <p className="text-sm font-medium text-emerald-800">
               Códigos gerados — anote e envie agora, eles só aparecem esta vez:
             </p>
-            <table className="mt-2 w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-emerald-700">
-                  <th className="pb-1">Colaborador</th>
-                  <th className="pb-1">Código</th>
-                </tr>
-              </thead>
-              <tbody>
-                {generatedCredentials.map((c) => (
-                  <tr key={c.employeeId}>
-                    <td className="py-1 text-emerald-900">{c.employeeName}</td>
-                    <td className="py-1 font-mono text-base font-semibold text-emerald-900">{c.code}</td>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-emerald-700">
+                    <th className="pb-1">Colaborador</th>
+                    <th className="pb-1">Código</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {generatedCredentials.map((c) => (
+                    <tr key={c.employeeId}>
+                      <td className="py-1 text-emerald-900">{c.employeeName}</td>
+                      <td className="py-1 font-mono text-base font-semibold text-emerald-900">{c.code}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p className="mt-2 text-xs text-emerald-700">
               O colaborador acessa /prova pelo celular, informa nome + contrato e digita esse
               código no lugar da senha.
@@ -612,50 +614,52 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-slate-900">Tentativas ({attempts.length})</h2>
-        <table className="mt-3 w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-slate-500">
-              <th className="pb-2">Funcionário</th>
-              <th className="pb-2">Contrato</th>
-              <th className="pb-2">Função</th>
-              <th className="pb-2">Modo</th>
-              <th className="pb-2">Data</th>
-              <th className="pb-2">Nota</th>
-            </tr>
-          </thead>
-          <tbody>
-            {attempts.length === 0 && (
-              <tr>
-                <td className="py-3 text-slate-400" colSpan={6}>
-                  Ninguém respondeu essa prova ainda.
-                </td>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-slate-500">
+                <th className="pb-2">Funcionário</th>
+                <th className="pb-2">Contrato</th>
+                <th className="pb-2">Função</th>
+                <th className="pb-2">Modo</th>
+                <th className="pb-2">Data</th>
+                <th className="pb-2">Nota</th>
               </tr>
-            )}
-            {attempts.map((a) => (
-              <tr key={a.id} className="border-t border-slate-100">
-                <td className="py-2 text-slate-800">{a.employeeName}</td>
-                <td className="py-2 text-slate-500">{a.sectorName}</td>
-                <td className="py-2 text-slate-500">{a.roleName}</td>
-                <td className="py-2">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      a.mode === "oficial" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500"
-                    }`}
-                    title={a.sessionLabel ?? undefined}
-                  >
-                    {a.mode === "oficial" ? a.sessionLabel || "oficial" : "simulado"}
-                  </span>
-                </td>
-                <td className="py-2 text-slate-500">
-                  {a.finishedAt ? new Date(a.finishedAt).toLocaleString("pt-BR") : "em andamento"}
-                </td>
-                <td className="py-2 text-slate-500">
-                  {a.percentage !== null ? `${a.percentage}%` : "-"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {attempts.length === 0 && (
+                <tr>
+                  <td className="py-3 text-slate-400" colSpan={6}>
+                    Ninguém respondeu essa prova ainda.
+                  </td>
+                </tr>
+              )}
+              {attempts.map((a) => (
+                <tr key={a.id} className="border-t border-slate-100">
+                  <td className="py-2 text-slate-800">{a.employeeName}</td>
+                  <td className="py-2 text-slate-500">{a.sectorName}</td>
+                  <td className="py-2 text-slate-500">{a.roleName}</td>
+                  <td className="py-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        a.mode === "oficial" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500"
+                      }`}
+                      title={a.sessionLabel ?? undefined}
+                    >
+                      {a.mode === "oficial" ? a.sessionLabel || "oficial" : "simulado"}
+                    </span>
+                  </td>
+                  <td className="py-2 text-slate-500">
+                    {a.finishedAt ? new Date(a.finishedAt).toLocaleString("pt-BR") : "em andamento"}
+                  </td>
+                  <td className="py-2 text-slate-500">
+                    {a.percentage !== null ? `${a.percentage}%` : "-"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

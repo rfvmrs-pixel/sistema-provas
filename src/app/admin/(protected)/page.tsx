@@ -255,33 +255,35 @@ export default async function AdminDashboardPage() {
               </div>
             </div>
           )}
-          <table className="mt-5 w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-slate-500">
-                <th className="pb-2">Tema</th>
-                <th className="pb-2">Respostas</th>
-                <th className="pb-2">Acerto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topicSummary.length === 0 && (
-                <tr>
-                  <td className="py-3 text-slate-400" colSpan={3}>
-                    Ainda sem dados suficientes.
-                  </td>
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500">
+                  <th className="pb-2">Tema</th>
+                  <th className="pb-2">Respostas</th>
+                  <th className="pb-2">Acerto</th>
                 </tr>
-              )}
-              {topicSummary.map((t) => (
-                <tr key={t.topic} className="border-t border-slate-100">
-                  <td className="py-2 text-slate-800">{t.topic}</td>
-                  <td className="py-2 text-slate-500">{t.totalAnswers}</td>
-                  <td className="py-2">
-                    <ScoreBadge value={t.accuracy} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {topicSummary.length === 0 && (
+                  <tr>
+                    <td className="py-3 text-slate-400" colSpan={3}>
+                      Ainda sem dados suficientes.
+                    </td>
+                  </tr>
+                )}
+                {topicSummary.map((t) => (
+                  <tr key={t.topic} className="border-t border-slate-100">
+                    <td className="py-2 text-slate-800">{t.topic}</td>
+                    <td className="py-2 text-slate-500">{t.totalAnswers}</td>
+                    <td className="py-2">
+                      <ScoreBadge value={t.accuracy} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -291,41 +293,44 @@ export default async function AdminDashboardPage() {
               ver todos
             </a>
           </div>
-          <table className="mt-3 w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-slate-500">
-                <th className="pb-2">Funcionário</th>
-                <th className="pb-2">Setor / Função</th>
-                <th className="pb-2">Média</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employeesNeedingTraining.length === 0 && (
-                <tr>
-                  <td className="py-3 text-slate-400" colSpan={3}>
-                    Ninguém abaixo da meta no momento.
-                  </td>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500">
+                  <th className="pb-2">Funcionário</th>
+                  <th className="pb-2">Setor / Função</th>
+                  <th className="pb-2">Média</th>
                 </tr>
-              )}
-              {employeesNeedingTraining.slice(0, 8).map((e) => (
-                <tr key={e.id} className="border-t border-slate-100">
-                  <td className="py-2 text-slate-800">{e.name}</td>
-                  <td className="py-2 text-slate-500">
-                    {e.sectorName} · {e.roleName}
-                  </td>
-                  <td className="py-2">
-                    <ScoreBadge value={e.avgScore} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {employeesNeedingTraining.length === 0 && (
+                  <tr>
+                    <td className="py-3 text-slate-400" colSpan={3}>
+                      Ninguém abaixo da meta no momento.
+                    </td>
+                  </tr>
+                )}
+                {employeesNeedingTraining.slice(0, 8).map((e) => (
+                  <tr key={e.id} className="border-t border-slate-100">
+                    <td className="py-2 text-slate-800">{e.name}</td>
+                    <td className="py-2 text-slate-500">
+                      {e.sectorName} · {e.roleName}
+                    </td>
+                    <td className="py-2">
+                      <ScoreBadge value={e.avgScore} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-slate-900">Últimas tentativas</h2>
-        <table className="mt-3 w-full text-sm">
+        <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-slate-500">
               <th className="pb-2">Funcionário</th>
@@ -360,6 +365,7 @@ export default async function AdminDashboardPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   );
