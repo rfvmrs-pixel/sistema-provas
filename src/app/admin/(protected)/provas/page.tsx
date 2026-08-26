@@ -45,11 +45,16 @@ export default function ProvasPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Upload pra biblioteca
-  const [file, setFile] = useState<File | null>(null);
+  // Upload pra biblioteca — aceita vários PDFs de uma vez, todos pro mesmo
+  // Contrato, enviados um por um em sequência pro endpoint (que só recebe 1
+  // arquivo por chamada).
+  const [files, setFiles] = useState<File[]>([]);
   const [uploadSectorId, setUploadSectorId] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
 
   // Gerar prova a partir de um PDF já salvo
   const [documentId, setDocumentId] = useState("");
@@ -94,25 +99,38 @@ export default function ProvasPage() {
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || !uploadSectorId) return;
+    if (files.length === 0 || !uploadSectorId) return;
     setUploadError(null);
     setUploading(true);
+    setUploadProgress({ done: 0, total: files.length });
+    const failed: string[] = [];
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("sectorId", uploadSectorId);
-      const res = await fetch("/api/admin/documents", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) {
-        setUploadError(data.error || "Falha ao enviar o PDF.");
-        return;
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        try {
+          const form = new FormData();
+          form.append("file", f);
+          form.append("sectorId", uploadSectorId);
+          const res = await fetch("/api/admin/documents", { method: "POST", body: form });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}) as { error?: string });
+            failed.push(`${f.name}: ${data.error || "falha ao enviar"}`);
+          }
+        } catch {
+          failed.push(`${f.name}: erro de rede`);
+        }
+        setUploadProgress({ done: i + 1, total: files.length });
       }
-      setFile(null);
+      if (failed.length > 0) {
+        setUploadError(`Falha em ${failed.length} de ${files.length} arquivo(s):\n${failed.join("\n")}`);
+      }
+      setFiles([]);
       (document.getElementById("pdf-input") as HTMLInputElement | null)?.value &&
         ((document.getElementById("pdf-input") as HTMLInputElement).value = "");
       load();
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   }
 
@@ -217,20 +235,26 @@ export default function ProvasPage() {
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">1. Biblioteca de PDFs</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Suba o PDF da IT/APR e identifique só o Contrato. O arquivo fica salvo e disponível pra
-            gerar provas depois.
+            Suba um ou vários PDFs de IT/APR de uma vez e identifique só o Contrato (o mesmo pra
+            todos). Os arquivos ficam salvos e disponíveis pra gerar provas depois.
           </p>
           <form onSubmit={handleUpload} className="mt-3 space-y-3">
             <div>
-              <label className="block text-xs font-medium text-slate-700">Arquivo PDF</label>
+              <label className="block text-xs font-medium text-slate-700">Arquivo(s) PDF</label>
               <input
                 id="pdf-input"
                 type="file"
                 accept="application/pdf"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                multiple
+                onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
                 className="mt-1 w-full text-sm"
                 required
               />
+              {files.length > 0 && (
+                <p className="mt-1 text-xs text-slate-500">
+                  {files.length === 1 ? "1 arquivo selecionado" : `${files.length} arquivos selecionados`}
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700">Contrato</label>
@@ -250,12 +274,16 @@ export default function ProvasPage() {
               </select>
             </div>
             <button
-              disabled={uploading || !file || !uploadSectorId}
+              disabled={uploading || files.length === 0 || !uploadSectorId}
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
             >
-              {uploading ? "Enviando..." : "Salvar PDF na biblioteca"}
+              {uploading
+                ? `Enviando ${uploadProgress?.done ?? 0}/${uploadProgress?.total ?? files.length}...`
+                : files.length > 1
+                  ? `Salvar ${files.length} PDFs na biblioteca`
+                  : "Salvar PDF na biblioteca"}
             </button>
-            {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
+            {uploadError && <p className="whitespace-pre-line text-sm text-red-600">{uploadError}</p>}
           </form>
 
           <div className="mt-5 border-t border-slate-100 pt-4">
