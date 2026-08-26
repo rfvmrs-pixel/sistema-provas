@@ -59,6 +59,10 @@ export default function ProvasPage() {
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
+  // Filtro por Contrato (biblioteca + tabela de provas), útil quando há
+  // vários Contratos cadastrados. "" = Todos.
+  const [contractFilter, setContractFilter] = useState("");
+
   async function load() {
     setLoading(true);
     const [examRes, docRes, secRes, roleRes] = await Promise.all([
@@ -162,6 +166,13 @@ export default function ProvasPage() {
     load();
   }
 
+  const filteredDocuments = contractFilter
+    ? documents.filter((d) => String(d.sectorId) === contractFilter)
+    : documents;
+  const filteredExams = contractFilter
+    ? exams.filter((e) => String(e.sectorId) === contractFilter)
+    : exams;
+
   return (
     <div className="space-y-6">
       <div>
@@ -172,6 +183,35 @@ export default function ProvasPage() {
           regerar) quantas provas quiser a partir dele.
         </p>
       </div>
+
+      {sectors.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">Contrato:</span>
+          <button
+            onClick={() => setContractFilter("")}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              contractFilter === ""
+                ? "bg-slate-900 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            Todos
+          </button>
+          {sectors.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setContractFilter(String(s.id))}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                contractFilter === String(s.id)
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -219,12 +259,17 @@ export default function ProvasPage() {
           </form>
 
           <div className="mt-5 border-t border-slate-100 pt-4">
-            <h3 className="text-xs font-semibold text-slate-700">PDFs salvos</h3>
-            {documents.length === 0 ? (
-              <p className="mt-2 text-xs text-slate-400">Nenhum PDF salvo ainda.</p>
+            <h3 className="text-xs font-semibold text-slate-700">
+              PDFs salvos
+              {contractFilter && ` — ${sectors.find((s) => String(s.id) === contractFilter)?.name ?? ""}`}
+            </h3>
+            {filteredDocuments.length === 0 ? (
+              <p className="mt-2 text-xs text-slate-400">
+                {documents.length === 0 ? "Nenhum PDF salvo ainda." : "Nenhum PDF salvo para esse Contrato."}
+              </p>
             ) : (
               <ul className="mt-2 space-y-2">
-                {documents.map((doc) => (
+                {filteredDocuments.map((doc) => (
                   <li
                     key={doc.id}
                     className="flex items-center justify-between gap-2 rounded-md border border-slate-100 px-3 py-2 text-xs"
@@ -273,7 +318,7 @@ export default function ProvasPage() {
                 required
               >
                 <option value="">Selecione...</option>
-                {documents.map((doc) => (
+                {filteredDocuments.map((doc) => (
                   <option key={doc.id} value={doc.id}>
                     {doc.fileName} ({doc.sectorName})
                   </option>
@@ -356,14 +401,14 @@ export default function ProvasPage() {
                   Carregando...
                 </td>
               </tr>
-            ) : exams.length === 0 ? (
+            ) : filteredExams.length === 0 ? (
               <tr>
                 <td className="px-5 py-4 text-slate-400" colSpan={9}>
-                  Nenhuma prova gerada ainda.
+                  {exams.length === 0 ? "Nenhuma prova gerada ainda." : "Nenhuma prova para esse Contrato."}
                 </td>
               </tr>
             ) : (
-              exams.map((exam) => (
+              filteredExams.map((exam) => (
                 <tr key={exam.id} className="border-b border-slate-50 last:border-0">
                   <td className="px-5 py-3">
                     <Link href={`/admin/provas/${exam.id}`} className="text-slate-800 hover:underline">
