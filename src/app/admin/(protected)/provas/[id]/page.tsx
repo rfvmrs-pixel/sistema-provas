@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use as usePromise } from "react";
 import Link from "next/link";
+import { useIsReadOnlyAdmin } from "../../AdminRoleContext";
 
 type Sector = { id: number; name: string };
 type Role = { id: number; name: string };
@@ -43,11 +44,21 @@ type Attempt = {
 type Employee = { id: number; name: string; active: boolean; sectorId: number; roleId: number };
 type GeneratedCredential = { employeeId: number; employeeName: string; code: string };
 type LibraryDocument = { id: number; fileName: string; sectorId: number; sectorName: string };
+type ExamLink = {
+  id: number;
+  token: string;
+  kind: "geral" | "direcionada";
+  label: string | null;
+  active: boolean;
+  targetEmployeeId: number | null;
+  targetEmployeeName: string | null;
+};
 
 const QUESTION_COUNT_OPTIONS = [10, 15];
 
 export default function ProvaDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = usePromise(params);
+  const isReadOnly = useIsReadOnlyAdmin();
   const [exam, setExam] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
@@ -69,22 +80,38 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
   const [generatingCodes, setGeneratingCodes] = useState(false);
   const [generatedCredentials, setGeneratedCredentials] = useState<GeneratedCredential[]>([]);
 
+  // Links de aplicação (Prova Geral / Prova Direcionada) — o colaborador
+  // abre o link e se autocadastra (nome, matrícula, tempo de empresa), sem
+  // precisar ter conta/senha criada antes.
+  const [examLinks, setExamLinks] = useState<ExamLink[]>([]);
+  const [geralLabel, setGeralLabel] = useState("");
+  const [creatingGeralLink, setCreatingGeralLink] = useState(false);
+  const [direcionadaName, setDirecionadaName] = useState("");
+  const [direcionadaMatricula, setDirecionadaMatricula] = useState("");
+  const [direcionadaLabel, setDirecionadaLabel] = useState("");
+  const [creatingDirecionadaLink, setCreatingDirecionadaLink] = useState(false);
+  const [linksError, setLinksError] = useState<string | null>(null);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
   async function load() {
     setLoading(true);
-    const [examRes, secRes, roleRes, empRes, docRes] = await Promise.all([
+    const [examRes, secRes, roleRes, empRes, docRes, linksRes] = await Promise.all([
       fetch(`/api/admin/exams/${id}`),
       fetch("/api/admin/sectors"),
       fetch("/api/admin/roles"),
       fetch("/api/admin/employees"),
       fetch("/api/admin/documents"),
+      fetch(`/api/admin/exams/${id}/links`),
     ]);
-    const [data, secData, roleData, empData, docData] = await Promise.all([
+    const [data, secData, roleData, empData, docData, linksData] = await Promise.all([
       examRes.json(),
       secRes.json(),
       roleRes.json(),
       empRes.json(),
       docRes.json(),
+      linksRes.json().catch(() => ({})),
     ]);
+    setExamLinks(linksData.links ?? []);
     setExam(data.exam);
     setQuestions(data.questions ?? []);
     setAttempts(data.attempts ?? []);
@@ -171,6 +198,75 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  async function handleCreateGeralLink(e: React.FormEvent) {
+    e.preventDefault();
+    setCreatingGeralLink(true);
+    setLinksError(null);
+    try {
+      const res = await fetch(`/api/admin/exams/${id}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "geral", label: geralLabel || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setLinksError(data.error || "Falha ao gerar o link.");
+        return;
+      }
+      setGeralLabel("");
+      load();
+    } finally {
+      setCreatingGeralLink(false);
+    }
+  }
+
+  async function handleCreateDirecionadaLink(e: React.FormEvent) {
+    e.preventDefault();
+    if (!direcionadaName || !direcionadaMatricula) return;
+    setCreatingDirecionadaLink(true);
+    setLinksError(null);
+    try {
+      const res = await fetch(`/api/admin/exams/${id}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "direcionada",
+          name: direcionadaName,
+          matricula: direcionadaMatricula,
+          label: direcionadaLabel || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setLinksError(data.error || "Falha ao gerar o link.");
+        return;
+      }
+      setDirecionadaName("");
+      setDirecionadaMatricula("");
+      setDirecionadaLabel("");
+      load();
+    } finally {
+      setCreatingDirecionadaLink(false);
+    }
+  }
+
+  async function toggleLinkActive(link: ExamLink) {
+    await fetch(`/api/admin/exam-links/${link.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: !link.active }),
+    });
+    load();
+  }
+
+  function copyLink(token: string) {
+    const url = `${window.location.origin}/prova/link/${token}`;
+    navigator.clipboard?.writeText(url).then(() => {
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken((t) => (t === token ? null : t)), 2000);
+    });
+  }
+
   if (loading) return <p className="text-sm text-slate-400">Carregando...</p>;
   if (!exam) return <p className="text-sm text-red-600">Prova não encontrada.</p>;
 
@@ -238,7 +334,7 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
               </select>
             </div>
             <button
-              disabled={savingLink}
+              disabled={isReadOnly || savingLink}
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
             >
               Salvar
@@ -292,7 +388,7 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
                 </select>
               </div>
               <button
-                disabled={regenerating || !regenDocumentId}
+                disabled={isReadOnly || regenerating || !regenDocumentId}
                 className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
               >
                 {regenerating ? "Regenerando..." : "Regenerar prova"}
@@ -343,7 +439,7 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
           )}
 
           <button
-            disabled={generatingCodes || selectedEmployeeIds.length === 0}
+            disabled={isReadOnly || generatingCodes || selectedEmployeeIds.length === 0}
             className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
           >
             {generatingCodes
@@ -378,6 +474,104 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
               código no lugar da senha.
             </p>
           </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-sm font-semibold text-slate-900">Links de aplicação</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Outra forma de aplicar essa prova, sem precisar pré-cadastrar ninguém: o colaborador abre
+          o link e se autocadastra (nome, matrícula, tempo de empresa). <strong>Geral</strong> serve
+          pra toda a equipe do Contrato/Função desta prova; <strong>Direcionada</strong> só funciona
+          pra uma pessoa específica.
+        </p>
+
+        {linksError && <p className="mt-2 text-sm text-red-600">{linksError}</p>}
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <form onSubmit={handleCreateGeralLink} className="rounded-md border border-slate-200 p-4">
+            <h3 className="text-xs font-semibold text-slate-700">Gerar link Geral</h3>
+            <input
+              value={geralLabel}
+              onChange={(e) => setGeralLabel(e.target.value)}
+              placeholder="Rótulo (opcional) — ex: Treinamento mensal"
+              className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-xs"
+            />
+            <button
+              disabled={isReadOnly || creatingGeralLink}
+              className="mt-2 w-full rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              {creatingGeralLink ? "Gerando..." : "Gerar link Geral"}
+            </button>
+          </form>
+
+          <form onSubmit={handleCreateDirecionadaLink} className="rounded-md border border-slate-200 p-4">
+            <h3 className="text-xs font-semibold text-slate-700">Gerar link Direcionado</h3>
+            <input
+              value={direcionadaName}
+              onChange={(e) => setDirecionadaName(e.target.value)}
+              placeholder="Nome do colaborador"
+              className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-xs"
+              required
+            />
+            <input
+              value={direcionadaMatricula}
+              onChange={(e) => setDirecionadaMatricula(e.target.value)}
+              placeholder="Matrícula"
+              className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-xs"
+              required
+            />
+            <input
+              value={direcionadaLabel}
+              onChange={(e) => setDirecionadaLabel(e.target.value)}
+              placeholder="Rótulo (opcional)"
+              className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-xs"
+            />
+            <button
+              disabled={isReadOnly || creatingDirecionadaLink || !direcionadaName || !direcionadaMatricula}
+              className="mt-2 w-full rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              {creatingDirecionadaLink ? "Gerando..." : "Gerar link Direcionado"}
+            </button>
+          </form>
+        </div>
+
+        {examLinks.length > 0 && (
+          <ul className="mt-4 divide-y divide-slate-100 rounded-md border border-slate-200">
+            {examLinks.map((link) => (
+              <li key={link.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                <div className="min-w-0">
+                  <span
+                    className={`mr-2 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      link.kind === "direcionada" ? "bg-indigo-100 text-indigo-700" : "bg-sky-100 text-sky-700"
+                    }`}
+                  >
+                    {link.kind === "direcionada" ? "Direcionada" : "Geral"}
+                  </span>
+                  <span className="text-slate-700">
+                    {link.kind === "direcionada" ? link.targetEmployeeName : link.label || "Sem rótulo"}
+                  </span>
+                  {!link.active && <span className="ml-2 text-xs text-slate-400">(desativado)</span>}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    onClick={() => copyLink(link.token)}
+                    className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                  >
+                    {copiedToken === link.token ? "Copiado!" : "Copiar link"}
+                  </button>
+                  {!isReadOnly && (
+                    <button
+                      onClick={() => toggleLinkActive(link)}
+                      className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                    >
+                      {link.active ? "Desativar" : "Reativar"}
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

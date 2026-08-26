@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 
 type Sector = { id: number; name: string };
 type Gestor = { id: number; username: string };
-type Director = { id: number; username: string };
+type DirectorRole = "diretoria" | "superintendencia";
+type Director = { id: number; username: string; role: DirectorRole };
 
 export default function ContratosPage() {
   const [sectors, setSectors] = useState<Sector[]>([]);
@@ -18,10 +19,12 @@ export default function ContratosPage() {
   const [savingGestorFor, setSavingGestorFor] = useState<number | null>(null);
   const [gestorForm, setGestorForm] = useState<Record<number, { username: string; password: string }>>({});
 
-  // Conta(s) de Diretoria: enxergam todos os Contratos e as estatísticas da
-  // empresa, mas são só leitura (não editam nada).
+  // Conta(s) de Diretoria/Superintendência: enxergam todos os Contratos e as
+  // estatísticas da empresa, mas são só leitura (não editam nada). Os dois
+  // roles têm exatamente o mesmo nível de acesso — só o rótulo muda.
   const [directorUsername, setDirectorUsername] = useState("");
   const [directorPassword, setDirectorPassword] = useState("");
+  const [directorRole, setDirectorRole] = useState<DirectorRole>("diretoria");
   const [savingDirector, setSavingDirector] = useState(false);
   const [directorError, setDirectorError] = useState<string | null>(null);
 
@@ -64,11 +67,11 @@ export default function ContratosPage() {
       const res = await fetch("/api/admin/directors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: directorUsername, password: directorPassword }),
+        body: JSON.stringify({ username: directorUsername, password: directorPassword, role: directorRole }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setDirectorError(data.error || "Falha ao criar conta de Diretoria.");
+        setDirectorError(data.error || "Falha ao criar conta.");
         return;
       }
       setDirectorUsername("");
@@ -237,21 +240,22 @@ export default function ContratosPage() {
       </div>
 
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">Contas de Diretoria</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Contas de Diretoria / Superintendência</h2>
         <p className="mt-1 text-sm text-slate-500">
           Enxergam todos os Contratos e as estatísticas da empresa como um todo, igual ao admin
-          geral — mas são somente leitura: não criam, editam ou excluem nada.
+          geral — mas são somente leitura: não criam, editam ou excluem nada. Os dois tipos têm o
+          mesmo nível de acesso, só muda o rótulo mostrado pra conta.
         </p>
       </div>
 
       <form
         onSubmit={handleAddDirector}
-        className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-3"
+        className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-4"
       >
         <input
           value={directorUsername}
           onChange={(e) => setDirectorUsername(e.target.value)}
-          placeholder="Usuário da Diretoria"
+          placeholder="Usuário"
           className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
           required
         />
@@ -263,23 +267,34 @@ export default function ContratosPage() {
           className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
           required
         />
+        <select
+          value={directorRole}
+          onChange={(e) => setDirectorRole(e.target.value as DirectorRole)}
+          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+        >
+          <option value="diretoria">Diretoria</option>
+          <option value="superintendencia">Superintendência</option>
+        </select>
         <button
           disabled={savingDirector || !directorUsername || !directorPassword}
           className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
         >
-          {savingDirector ? "Salvando..." : "Criar/redefinir conta de Diretoria"}
+          {savingDirector ? "Salvando..." : "Criar/redefinir conta"}
         </button>
       </form>
       {directorError && <p className="text-sm text-red-600">{directorError}</p>}
 
       <div className="rounded-xl border border-slate-200 bg-white">
         {directors.length === 0 ? (
-          <p className="p-5 text-sm text-slate-400">Nenhuma conta de Diretoria cadastrada ainda.</p>
+          <p className="p-5 text-sm text-slate-400">Nenhuma conta cadastrada ainda.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
             {directors.map((d) => (
-              <li key={d.id} className="px-5 py-3 text-sm text-slate-800">
+              <li key={d.id} className="flex items-center justify-between px-5 py-3 text-sm text-slate-800">
                 {d.username}
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                  {d.role === "superintendencia" ? "Superintendência" : "Diretoria"}
+                </span>
               </li>
             ))}
           </ul>

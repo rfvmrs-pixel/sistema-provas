@@ -21,6 +21,8 @@ export async function GET() {
       sectorName: sectors.name,
       roleId: employees.roleId,
       roleName: roles.name,
+      matricula: employees.matricula,
+      tempoDeEmpresa: employees.tempoDeEmpresa,
     })
     .from(employees)
     .innerJoin(sectors, eq(employees.sectorId, sectors.id))
@@ -40,6 +42,7 @@ export async function POST(request: NextRequest) {
   const sectorId = Number(body?.sectorId);
   const roleId = Number(body?.roleId);
   const password = body?.password?.toString();
+  const matricula = body?.matricula?.toString().trim() || null;
 
   if (!name || !sectorId || !roleId || !password) {
     return NextResponse.json(
@@ -61,12 +64,12 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(password);
     const [created] = await db
       .insert(employees)
-      .values({ name, sectorId, roleId, passwordHash })
+      .values({ name, sectorId, roleId, passwordHash, matricula })
       .returning();
     return NextResponse.json({ employee: created }, { status: 201 });
   } catch {
     return NextResponse.json(
-      { error: "Já existe um funcionário com esse nome nesse setor." },
+      { error: "Já existe um funcionário com esse nome (ou matrícula) nesse setor." },
       { status: 409 },
     );
   }

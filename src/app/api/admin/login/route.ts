@@ -30,7 +30,10 @@ export async function POST(request: NextRequest) {
     sectorName = sector?.name ?? null;
   }
 
-  const role = admin.role === "admin" || admin.role === "diretoria" ? admin.role : "gestor";
+  const role =
+    admin.role === "admin" || admin.role === "diretoria" || admin.role === "superintendencia"
+      ? admin.role
+      : "gestor";
 
   await createAdminSession({
     adminId: admin.id,

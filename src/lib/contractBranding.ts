@@ -20,7 +20,9 @@ export type ContractBranding =
 const BRANDING_BY_SECTOR: Record<string, ContractBranding> = {
   EQUINOR: { kind: "client", logoSrc: "/logos/equinor.png", clientName: "Equinor" },
   "PRIME OCEAN": { kind: "client", logoSrc: "/logos/prime_ocean.png", clientName: "Prime Ocean" },
-  "ARM RIO": { kind: "client", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
+  // ARM RIO, LON1 e LON2 são todos vinculados à Petrobras: mostram a marca da
+  // Triunfo em destaque (maior) + o logo da Petrobras pequeno, no canto.
+  "ARM RIO": { kind: "combo", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
   LON1: { kind: "combo", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
   LON2: { kind: "combo", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
 };

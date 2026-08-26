@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ExamRunner } from "@/components/exam/ExamRunner";
 
 type Sector = { id: number; name: string };
 type DocumentType = "IT" | "APR";
@@ -15,24 +16,13 @@ type ExamListItem = {
 };
 type Option = { key: string; text: string };
 type Question = { id: number; text: string; options: Option[]; order: number };
-type ReviewItem = {
-  questionId: number;
-  text: string;
-  options: Option[];
-  correctKey: string;
-  selectedKey: string | null;
-  correct: boolean;
-  explanation: string | null;
-  topic: string | null;
-};
 
 type Mode = "simulado" | "oficial";
 
 type Step =
   | { kind: "login" }
   | { kind: "list"; employeeName: string; mode: Mode }
-  | { kind: "taking"; attemptId: number; examTitle: string; questions: Question[]; mode: Mode }
-  | { kind: "result"; percentage: number; passed: boolean; passingScore: number; review: ReviewItem[]; mode: Mode };
+  | { kind: "taking"; attemptId: number; examTitle: string; questions: Question[]; mode: Mode };
 
 export default function ProvaPage() {
   const [step, setStep] = useState<Step>({ kind: "login" });
@@ -44,7 +34,6 @@ export default function ProvaPage() {
   const [useCode, setUseCode] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [exams, setExams] = useState<ExamListItem[]>([]);
-  const [answersMap, setAnswersMap] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -103,7 +92,6 @@ export default function ProvaPage() {
         alert(data.error || "Não foi possível iniciar a prova.");
         return;
       }
-      setAnswersMap({});
       setStep({
         kind: "taking",
         attemptId: data.attemptId,
@@ -116,47 +104,9 @@ export default function ProvaPage() {
     }
   }
 
-  async function submitExam() {
-    if (step.kind !== "taking") return;
-    const unanswered = step.questions.filter((q) => !answersMap[q.id]);
-    if (unanswered.length > 0 && !confirm(`Você deixou ${unanswered.length} questão(ões) em branco. Enviar mesmo assim?`)) {
-      return;
-    }
-    setBusy(true);
-    try {
-      const payload = {
-        answers: step.questions.map((q) => ({
-          questionId: q.id,
-          selectedKey: answersMap[q.id] ?? null,
-        })),
-      };
-      const res = await fetch(`/api/employee/attempts/${step.attemptId}/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || "Falha ao enviar a prova.");
-        return;
-      }
-      setStep({
-        kind: "result",
-        percentage: data.attempt.percentage,
-        passed: !!data.passed,
-        passingScore: data.passingScore ?? 70,
-        review: data.review,
-        mode: step.mode,
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function backToList() {
-    const { mode, exams: list } = await loadExams();
-    setStep((s) => (s.kind === "login" ? s : { kind: "list", employeeName: name, mode }));
-    void list;
+    const { mode } = await loadExams();
+    setStep({ kind: "list", employeeName: name, mode });
   }
 
   return (
@@ -292,114 +242,13 @@ export default function ProvaPage() {
         )}
 
         {step.kind === "taking" && (
-          <div className="space-y-5">
-            <h1 className="text-lg font-semibold text-slate-900">{step.examTitle}</h1>
-            {step.questions.map((q, idx) => (
-              <div key={q.id} className="rounded-xl border border-slate-200 bg-white p-5">
-                <p className="text-sm font-medium text-slate-800">
-                  {idx + 1}. {q.text}
-                </p>
-                <div className="mt-3 space-y-2">
-                  {q.options.map((opt) => (
-                    <label
-                      key={opt.key}
-                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm ${
-                        answersMap[q.id] === opt.key
-                          ? "border-slate-900 bg-slate-50"
-                          : "border-slate-200"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name={`q-${q.id}`}
-                        checked={answersMap[q.id] === opt.key}
-                        onChange={() => setAnswersMap((m) => ({ ...m, [q.id]: opt.key }))}
-                      />
-                      <span>
-                        {opt.key}) {opt.text}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-            <button
-              disabled={busy}
-              onClick={submitExam}
-              className="w-full rounded-md bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-            >
-              {busy ? "Enviando..." : "Finalizar e enviar"}
-            </button>
-          </div>
-        )}
-
-        {step.kind === "result" && (
-          <div className="space-y-5">
-            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-              <p className="text-sm text-slate-500">Sua nota</p>
-              <p
-                className={`mt-1 text-4xl font-semibold ${
-                  step.passed ? "text-emerald-600" : "text-red-600"
-                }`}
-              >
-                {step.percentage}%
-              </p>
-              <p className="mt-2 text-sm text-slate-500">
-                {step.passed
-                  ? "Parabéns, você atingiu a nota mínima!"
-                  : `Nota mínima exigida: ${step.passingScore}%. Recomendamos revisar o material.`}
-              </p>
-              {step.mode === "oficial" ? (
-                <p className="mt-6 text-sm text-slate-500">
-                  Prova oficial concluída. O resultado foi registrado para o seu gestor — pode
-                  fechar esta janela.
-                </p>
-              ) : (
-                <button
-                  onClick={backToList}
-                  className="mt-6 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  Voltar para a lista de provas
-                </button>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-5">
-              <h2 className="text-sm font-semibold text-slate-900">Revisão</h2>
-              <ol className="mt-3 space-y-4">
-                {step.review.map((r, idx) => (
-                  <li key={r.questionId} className="border-t border-slate-100 pt-3 first:border-0 first:pt-0">
-                    <p className="text-sm font-medium text-slate-800">
-                      {idx + 1}. {r.text}
-                    </p>
-                    <ul className="mt-1 space-y-1 text-sm">
-                      {r.options.map((opt) => {
-                        const isCorrect = opt.key === r.correctKey;
-                        const isSelected = opt.key === r.selectedKey;
-                        return (
-                          <li
-                            key={opt.key}
-                            className={
-                              isCorrect
-                                ? "font-medium text-emerald-700"
-                                : isSelected
-                                  ? "font-medium text-red-600"
-                                  : "text-slate-500"
-                            }
-                          >
-                            {opt.key}) {opt.text}
-                            {isCorrect && " ✓"}
-                            {isSelected && !isCorrect && " (sua resposta)"}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {r.explanation && <p className="mt-1 text-xs text-slate-400">{r.explanation}</p>}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </div>
+          <ExamRunner
+            attemptId={step.attemptId}
+            examTitle={step.examTitle}
+            questions={step.questions}
+            mode={step.mode}
+            onExit={backToList}
+          />
         )}
       </div>
     </div>

@@ -35,21 +35,28 @@ export async function requireSuperAdmin(): Promise<
   return guard;
 }
 
-// Bloqueia contas "diretoria" (só leitura) em qualquer rota de escrita
-// (POST/PATCH/DELETE). Admin geral e gestor de contrato passam normalmente —
-// a checagem de qual Contrato cada um pode mexer continua com
-// canAccessSector. Use isso no lugar de requireAdmin() em todo handler que
-// cria, edita ou exclui algo.
+// Bloqueia contas só-leitura ("diretoria" e "superintendencia") em qualquer
+// rota de escrita (POST/PATCH/DELETE). Admin geral e gestor de contrato
+// passam normalmente — a checagem de qual Contrato cada um pode mexer
+// continua com canAccessSector. Use isso no lugar de requireAdmin() em todo
+// handler que cria, edita ou exclui algo.
+const READ_ONLY_ROLES: AdminSessionData["role"][] = ["diretoria", "superintendencia"];
+
 export async function requireEditor(): Promise<
   { ok: true; admin: AdminSessionData } | { ok: false; response: NextResponse }
 > {
   const guard = await requireAdmin();
   if (!guard.ok) return guard;
-  if (guard.admin.role === "diretoria") {
+  if (READ_ONLY_ROLES.includes(guard.admin.role)) {
     return {
       ok: false,
       response: NextResponse.json(
-        { error: "Sua conta é somente leitura (Diretoria) — essa ação não é permitida." },
+        {
+          error:
+            guard.admin.role === "superintendencia"
+              ? "Sua conta é somente leitura (Superintendência) — essa ação não é permitida."
+              : "Sua conta é somente leitura (Diretoria) — essa ação não é permitida.",
+        },
         { status: 403 },
       ),
     };

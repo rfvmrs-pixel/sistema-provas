@@ -26,7 +26,8 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
   // quem edita — Diretoria já vê todos os Contratos no Painel/Provas/
   // Funcionários (sectorId null), não precisa dessa tela de gerenciamento.
   const navItems = admin.role === "admin" ? [...BASE_NAV_ITEMS, SUPER_ADMIN_NAV_ITEM] : BASE_NAV_ITEMS;
-  const isReadOnly = admin.role === "diretoria";
+  const isReadOnly = admin.role === "diretoria" || admin.role === "superintendencia";
+  const readOnlyLabel = admin.role === "superintendencia" ? "Superintendência" : "Diretoria";
 
   return (
     <AdminRoleProvider role={admin.role}>
@@ -61,9 +62,9 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
                 {admin.role === "admin" && (
                   <span className="ml-1.5 text-xs text-slate-400">(admin geral)</span>
                 )}
-                {admin.role === "diretoria" && (
+                {isReadOnly && (
                   <span className="ml-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                    Diretoria · somente leitura
+                    {readOnlyLabel} · somente leitura
                   </span>
                 )}
               </span>
@@ -73,8 +74,8 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
         </header>
         {isReadOnly && (
           <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-center text-xs font-medium text-amber-800">
-            Você está no modo Diretoria: pode ver todos os Contratos e estatísticas, mas não pode
-            criar, editar ou excluir nada.
+            Você está no modo {readOnlyLabel}: pode ver todos os Contratos e estatísticas, mas não
+            pode criar, editar ou excluir nada.
           </div>
         )}
         <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">{children}</main>

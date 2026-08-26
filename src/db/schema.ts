@@ -58,6 +58,14 @@ export const employees = pgTable(
       .references(() => roles.id, { onDelete: "restrict" }),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     active: boolean("active").default(true).notNull(),
+    // Matrícula: identifica o colaborador quando ele se autocadastra ao abrir
+    // um link de "Prova Geral"/"Prova Direcionada" (ver examLinks). Única por
+    // Contrato — funcionários antigos (cadastrados manualmente antes dessa
+    // função existir) ficam com matrícula null, sem problema.
+    matricula: varchar("matricula", { length: 50 }),
+    // Faixa de tempo de empresa, pra alimentar as análises do painel:
+    // "0-6m" | "6m-1a" | "1-3a" | "3-5a" | "5a+"
+    tempoDeEmpresa: varchar("tempo_de_empresa", { length: 10 }),
     // ---- Código temporário de "prova do dia" ----
     // O gestor gera, para uma leva de colaboradores, um código de uso único
     // (login = nome + setor, senha = este código) válido só para UMA prova
@@ -75,6 +83,10 @@ export const employees = pgTable(
   (t) => [
     // mesmo nome pode existir em setores diferentes, mas não duplicado dentro do setor
     uniqueIndex("employees_name_sector_unique").on(t.name, t.sectorId),
+    // matrícula é o identificador do autocadastro (ver examLinks) — única por
+    // Contrato. Postgres permite múltiplos NULL num índice único, então
+    // funcionários sem matrícula (cadastro manual antigo) não conflitam.
+    uniqueIndex("employees_matricula_sector_unique").on(t.matricula, t.sectorId),
     index("employees_sector_idx").on(t.sectorId),
     index("employees_role_idx").on(t.roleId),
   ],
@@ -152,6 +164,36 @@ export const questions = pgTable(
   (t) => [index("questions_exam_idx").on(t.examId)],
 );
 
+// ---------- Links de aplicação de prova ----------
+// O gestor gera um link público pra aplicar uma prova sem precisar
+// pré-cadastrar ninguém: quem abre o link se autocadastra (nome, matrícula,
+// tempo de empresa — Contrato e Função já vêm da própria prova) e cai direto
+// na prova.
+// - "geral"       -> qualquer colaborador do Contrato/Função da prova pode
+//                    usar o link; o autocadastro cria (ou atualiza, se a
+//                    matrícula já existir) o funcionário na hora.
+// - "direcionada" -> o gestor já escolheu/criou um funcionário específico
+//                    (targetEmployeeId); só quem digitar a matrícula desse
+//                    funcionário consegue entrar por esse link.
+export const examLinks = pgTable(
+  "exam_links",
+  {
+    id: serial("id").primaryKey(),
+    examId: integer("exam_id")
+      .notNull()
+      .references(() => exams.id, { onDelete: "cascade" }),
+    token: varchar("token", { length: 40 }).notNull().unique(),
+    kind: varchar("kind", { length: 20 }).default("geral").notNull(),
+    targetEmployeeId: integer("target_employee_id").references(() => employees.id, {
+      onDelete: "set null",
+    }),
+    label: varchar("label", { length: 150 }),
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [index("exam_links_exam_idx").on(t.examId)],
+);
+
 // ---------- Tentativas ----------
 export const attempts = pgTable(
   "attempts",
@@ -164,12 +206,16 @@ export const attempts = pgTable(
       .notNull()
       .references(() => employees.id, { onDelete: "cascade" }),
     // "simulado"  -> colaborador logado com a própria senha, praticando livremente.
-    // "oficial"   -> "prova do dia": acesso via código de uso único gerado pelo
-    //                gestor para aquela aplicação. Resultado só sai nos
-    //                relatórios do admin/gestor (o colaborador não tem login
-    //                persistente para consultar depois).
+    // "oficial"   -> prova aplicada de verdade: seja pelo código de uso único
+    //                da "prova do dia" ou por um link (geral/direcionada) —
+    //                ver examLinkId. Resultado só sai nos relatórios do
+    //                admin/gestor (o colaborador não tem login persistente
+    //                pra consultar depois).
     mode: varchar("mode", { length: 20 }).default("simulado").notNull(),
-    sessionLabel: varchar("session_label", { length: 150 }), // rótulo da "prova do dia", quando mode = oficial
+    sessionLabel: varchar("session_label", { length: 150 }), // rótulo da aplicação, quando mode = oficial
+    // Se essa tentativa veio de um link de aplicação (geral/direcionada) —
+    // null quando veio do código de "prova do dia" antigo ou é "simulado".
+    examLinkId: integer("exam_link_id").references(() => examLinks.id, { onDelete: "set null" }),
     startedAt: timestamp("started_at").defaultNow().notNull(),
     finishedAt: timestamp("finished_at"),
     score: integer("score"),
@@ -234,9 +280,16 @@ export const employeesRelations = relations(employees, ({ one, many }) => ({
 export const examsRelations = relations(exams, ({ one, many }) => ({
   questions: many(questions),
   attempts: many(attempts),
+  links: many(examLinks),
   sector: one(sectors, { fields: [exams.sectorId], references: [sectors.id] }),
   role: one(roles, { fields: [exams.roleId], references: [roles.id] }),
   document: one(documents, { fields: [exams.documentId], references: [documents.id] }),
+}));
+
+export const examLinksRelations = relations(examLinks, ({ one, many }) => ({
+  exam: one(exams, { fields: [examLinks.examId], references: [exams.id] }),
+  targetEmployee: one(employees, { fields: [examLinks.targetEmployeeId], references: [employees.id] }),
+  attempts: many(attempts),
 }));
 
 export const questionsRelations = relations(questions, ({ one, many }) => ({
@@ -247,6 +300,7 @@ export const questionsRelations = relations(questions, ({ one, many }) => ({
 export const attemptsRelations = relations(attempts, ({ one, many }) => ({
   exam: one(exams, { fields: [attempts.examId], references: [exams.id] }),
   employee: one(employees, { fields: [attempts.employeeId], references: [employees.id] }),
+  examLink: one(examLinks, { fields: [attempts.examLinkId], references: [examLinks.id] }),
   answers: many(answers),
 }));
 

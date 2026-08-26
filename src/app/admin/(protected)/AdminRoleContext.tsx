@@ -15,9 +15,11 @@ export function AdminRoleProvider({
   return <AdminRoleContext.Provider value={role}>{children}</AdminRoleContext.Provider>;
 }
 
-// true quando a conta logada é "diretoria": enxerga tudo, mas não pode
-// criar/editar/excluir nada (o servidor já bloqueia via requireEditor — isso
-// aqui é só pra esconder/desabilitar os controles de escrita na tela).
+// true quando a conta logada é "diretoria" ou "superintendencia": enxergam
+// tudo, mas não podem criar/editar/excluir nada (o servidor já bloqueia via
+// requireEditor — isso aqui é só pra esconder/desabilitar os controles de
+// escrita na tela).
 export function useIsReadOnlyAdmin(): boolean {
-  return useContext(AdminRoleContext) === "diretoria";
+  const role = useContext(AdminRoleContext);
+  return role === "diretoria" || role === "superintendencia";
 }

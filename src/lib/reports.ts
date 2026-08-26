@@ -1,6 +1,7 @@
 import { and, avg, count, eq, gte, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { attempts, employees, sectors, roles, answers, questions, exams } from "@/db/schema";
+import { TENURE_OPTIONS, tenureLabel } from "@/lib/tenure";
 
 const TRAINING_THRESHOLD = 70; // % abaixo disso é sinalizado como "precisa de treinamento"
 
@@ -249,6 +250,62 @@ export async function getDocumentTypeSummary(sectorId?: number): Promise<Documen
     avgScore: round(r.avgScore),
     attemptCount: Number(r.attemptCount),
   }));
+}
+
+// Tempo médio (em minutos) que os colaboradores levam pra terminar uma
+// prova — calculado a partir de startedAt/finishedAt, sem precisar de coluna
+// nova no banco.
+export async function getAvgDurationMinutes(sectorId?: number): Promise<number> {
+  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+  const [row] = await db
+    .select({
+      avgSeconds: sql<number | null>`avg(extract(epoch from (${attempts.finishedAt} - ${attempts.startedAt})))`,
+    })
+    .from(attempts)
+    .innerJoin(employees, eq(attempts.employeeId, employees.id))
+    .where(and(isNotNull(attempts.finishedAt), scope));
+
+  if (!row || row.avgSeconds === null) return 0;
+  return Math.round(Number(row.avgSeconds) / 60);
+}
+
+export type TenureSummaryRow = {
+  code: string | null;
+  label: string;
+  avgScore: number;
+  attemptCount: number;
+  needsTraining: boolean;
+};
+
+// Desempenho agrupado por tempo de empresa (faixas fixas cadastradas no
+// autocadastro) — ajuda a ver se colaboradores mais novos de casa erram mais
+// que os veteranos.
+export async function getTenureSummary(sectorId?: number): Promise<TenureSummaryRow[]> {
+  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+  const rows = await db
+    .select({
+      code: employees.tempoDeEmpresa,
+      avgScore: avg(attempts.percentage),
+      attemptCount: count(attempts.id),
+    })
+    .from(employees)
+    .leftJoin(
+      attempts,
+      and(eq(attempts.employeeId, employees.id), isNotNull(attempts.percentage)),
+    )
+    .where(scope)
+    .groupBy(employees.tempoDeEmpresa);
+
+  const order: (string | null)[] = [...TENURE_OPTIONS.map((o) => o.value), null];
+  return rows
+    .map((r) => ({
+      code: r.code,
+      label: tenureLabel(r.code),
+      avgScore: round(r.avgScore),
+      attemptCount: Number(r.attemptCount),
+      needsTraining: r.attemptCount > 0 && round(r.avgScore) < TRAINING_THRESHOLD,
+    }))
+    .sort((a, b) => order.indexOf(a.code) - order.indexOf(b.code));
 }
 
 export type TrendPoint = {

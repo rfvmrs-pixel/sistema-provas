@@ -6,6 +6,8 @@ import {
   getRecentAttempts,
   getDocumentTypeSummary,
   getScoreTrend,
+  getAvgDurationMinutes,
+  getTenureSummary,
 } from "@/lib/reports";
 import { getAdminSession } from "@/lib/session";
 import { MeterBarList } from "@/components/charts/MeterBar";
@@ -48,6 +50,8 @@ export default async function AdminDashboardPage() {
     recentAttempts,
     documentTypeSummary,
     scoreTrend,
+    avgDurationMinutes,
+    tenureSummary,
   ] = await Promise.all([
     getSectorSummary(sectorId),
     getRoleSummary(sectorId),
@@ -56,6 +60,8 @@ export default async function AdminDashboardPage() {
     getRecentAttempts(15, sectorId),
     getDocumentTypeSummary(sectorId),
     getScoreTrend(30, sectorId),
+    getAvgDurationMinutes(sectorId),
+    getTenureSummary(sectorId),
   ]);
 
   const totalAttempts = employeeSummary.reduce((acc, e) => acc + e.attemptCount, 0);
@@ -80,11 +86,12 @@ export default async function AdminDashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Card label="Funcionários avaliados" value={evaluated.length} />
         <Card label="Tentativas concluídas" value={totalAttempts} />
         <Card label="Média geral" value={`${overallAvg}%`} />
         <Card label="Precisam de treinamento" value={employeesNeedingTraining.length} />
+        <Card label="Tempo médio de prova" value={avgDurationMinutes > 0 ? `${avgDurationMinutes} min` : "—"} />
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -172,6 +179,27 @@ export default async function AdminDashboardPage() {
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Desempenho por tempo de casa</h2>
+          <p className="text-xs text-slate-500">
+            Compara colaboradores mais novos com os mais veteranos, pelas faixas informadas no
+            cadastro/autocadastro.
+          </p>
+          <div className="mt-4">
+            <MeterBarList
+              emptyMessage="Ainda sem dados de tempo de empresa."
+              items={tenureSummary
+                .filter((t) => t.attemptCount > 0)
+                .map((t) => ({
+                  id: t.code ?? "none",
+                  label: t.label,
+                  value: t.avgScore,
+                  sublabel: `${t.attemptCount} ${t.attemptCount === 1 ? "tentativa" : "tentativas"}`,
+                }))}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">IT x APR</h2>
           <p className="text-xs text-slate-500">
             Compara o desempenho em provas de Instrução de Trabalho (IT) com as de Análise
@@ -191,10 +219,41 @@ export default async function AdminDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Desempenho por tema</h2>
+        <section className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-2">
+          <h2 className="text-sm font-semibold text-slate-900">Critérios/temas: onde mais acertam x onde mais erram</h2>
           <p className="text-xs text-slate-500">Temas identificados automaticamente pela IA dentro das provas.</p>
-          <table className="mt-3 w-full text-sm">
+          {topicSummary.length > 0 && (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase text-red-600">Onde mais erram</p>
+                <MeterBarList
+                  emptyMessage="—"
+                  items={topicSummary.slice(0, 5).map((t) => ({
+                    id: t.topic,
+                    label: t.topic,
+                    value: t.accuracy,
+                    sublabel: `${t.totalAnswers} respostas`,
+                  }))}
+                />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase text-emerald-600">Onde mais acertam</p>
+                <MeterBarList
+                  emptyMessage="—"
+                  items={[...topicSummary]
+                    .sort((a, b) => b.accuracy - a.accuracy)
+                    .slice(0, 5)
+                    .map((t) => ({
+                      id: t.topic,
+                      label: t.topic,
+                      value: t.accuracy,
+                      sublabel: `${t.totalAnswers} respostas`,
+                    }))}
+                />
+              </div>
+            </div>
+          )}
+          <table className="mt-5 w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-slate-500">
                 <th className="pb-2">Tema</th>

@@ -52,6 +52,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       totalQuestions: examQuestions.length,
       mode,
       sessionLabel: mode === "oficial" ? employee.sessionLabel ?? null : null,
+      examLinkId: mode === "oficial" ? employee.examLinkId ?? null : null,
     })
     .returning();
 

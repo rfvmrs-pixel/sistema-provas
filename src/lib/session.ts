@@ -7,17 +7,18 @@ const secret = new TextEncoder().encode(secretValue);
 const ADMIN_COOKIE = "admin_session";
 const EMPLOYEE_COOKIE = "employee_session";
 
-export type AdminRole = "admin" | "diretoria" | "gestor";
+export type AdminRole = "admin" | "diretoria" | "superintendencia" | "gestor";
 
 export type AdminSessionData = {
   adminId: number;
   username: string;
-  // null = enxerga todos os Contratos (role "admin" ou "diretoria"). Número =
-  // gestor travado no próprio contrato (Setor).
+  // null = enxerga todos os Contratos (role "admin", "diretoria" ou
+  // "superintendencia"). Número = gestor travado no próprio contrato (Setor).
   sectorId: number | null;
   sectorName: string | null;
-  // "admin" = super admin, edita tudo. "diretoria" = vê tudo, só leitura.
-  // "gestor" = só o próprio Contrato, com escrita normal nele.
+  // "admin" = super admin, edita tudo. "diretoria" e "superintendencia" veem
+  // tudo, só leitura (mesmo nível de visão, sem poder de edição). "gestor" =
+  // só o próprio Contrato, com escrita normal nele.
   role: AdminRole;
 };
 export type EmployeeSessionData = {
@@ -28,11 +29,16 @@ export type EmployeeSessionData = {
   roleId: number;
   roleName: string;
   // "simulado" (padrão): login pessoal, vê/pratica qualquer prova do seu Setor+Função.
-  // "oficial": entrou com o código de uso único de uma "prova do dia" — só pode
-  // fazer o exame travado em examId, e o código é queimado ao finalizar.
+  // "oficial": entrou com o código de uso único de uma "prova do dia" (ou por
+  // um link de aplicação — ver examLinkId) — só pode fazer o exame travado em
+  // examId, e a sessão é encerrada ao finalizar.
   mode?: "simulado" | "oficial";
   examId?: number;
   sessionLabel?: string | null;
+  // Presente quando o colaborador entrou por um link de aplicação (Prova
+  // Geral/Direcionada) em vez do código de "prova do dia" clássico — usado só
+  // pra registrar de onde veio a tentativa (ver attempts.examLinkId).
+  examLinkId?: number;
 };
 
 async function sign(data: Record<string, unknown>, expires: string) {
