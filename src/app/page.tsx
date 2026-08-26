@@ -219,10 +219,11 @@ export default function HomePage() {
         />
         <h1 className="mt-5 text-3xl font-semibold text-slate-900">Triunfo Skill</h1>
         <p className="mt-1 text-base font-medium text-slate-600">Avaliação de Competências Operacionais</p>
-        <p className="mt-3 text-sm text-slate-500">
+        <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-500">
           Provas de múltipla escolha geradas a partir de IT (Instrução de Trabalho) e APR (Análise
           Preliminar de Risco), organizadas por Contrato e Função.
         </p>
+        {view !== "login" && <div className="mx-auto mt-8 h-px w-16 bg-slate-200" />}
 
         {view === "login" ? (
           <div className="flex justify-center">
@@ -230,8 +231,10 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            <div className="mt-10 text-left">
-              <h2 className="text-sm font-semibold text-slate-700">Contratos</h2>
+            <div className="mt-12 text-left">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Contratos
+              </h2>
               <p className="mt-1 text-xs text-slate-500">
                 Acesso do gestor: gere a prova do dia e acompanhe os resultados do seu Contrato.
               </p>
@@ -246,10 +249,24 @@ export default function HomePage() {
                     <ContractTile key={s.id} sector={s} onClick={openLogin} />
                   ))
                 )}
+              </div>
+            </div>
 
-                {/* Cartão do Admin geral — mesmo grid dos Contratos. Login de
-                    acesso completo: cria, edita e exclui (Contratos, provas,
-                    colaboradores, contas de gestor/Diretoria). */}
+            {/* Acesso administrativo — separado do grid de Contratos de
+                propósito, e depois dele: são perfis diferentes (gestão geral
+                e visão só-leitura da empresa toda), não mais um Contrato. */}
+            <div className="mt-10 text-left">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Acesso administrativo
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Admin gerencia tudo; Diretoria/Superintendência acompanha todos os Contratos, só
+                leitura.
+              </p>
+
+              <div className="mx-auto mt-4 grid max-w-md grid-cols-2 gap-3">
+                {/* Login de acesso completo: cria, edita e exclui (Contratos,
+                    provas, colaboradores, contas de gestor/Diretoria). */}
                 <button
                   type="button"
                   onClick={() => openLogin("Admin")}
@@ -273,8 +290,8 @@ export default function HomePage() {
                   </div>
                 </button>
 
-                {/* Cartão de Diretoria / Superintendência — cartão separado do
-                    Admin porque a permissão é bem diferente: essas contas só
+                {/* Diretoria / Superintendência — cartão separado do Admin
+                    porque a permissão é bem diferente: essas contas só
                     VISUALIZAM todos os Contratos e resultados (não criam, não
                     editam, não excluem nada — bloqueado em requireEditor). O
                     login em si é o mesmo formulário; quem diferencia é a
@@ -306,7 +323,9 @@ export default function HomePage() {
             </div>
 
             <div className="mt-10 rounded-xl border border-slate-200 bg-white p-6 text-left shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-700">Simulados</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Simulados
+              </h2>
               <p className="mt-1 text-xs text-slate-500">
                 Qualquer colaborador pode escolher o Contrato, a Função e o tipo de documento (IT
                 ou APR) e realizar uma prova de treinamento. O resultado também fica registrado.
