@@ -1,4 +1,4 @@
-import { and, avg, count, eq, gte, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, avg, count, eq, gte, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { attempts, employees, sectors, roles, answers, questions, exams } from "@/db/schema";
 import { TENURE_OPTIONS, tenureLabel } from "@/lib/tenure";
@@ -22,17 +22,19 @@ export type TopicRow = {
 
 export type TopicByGroupRow = TopicRow & { groupId: number; groupName: string };
 
-// Todas as funções abaixo aceitam um `sectorId` opcional: quando informado
-// (gestor de contrato), os números só consideram aquele contrato. Quando
-// omitido (admin geral), consideram a empresa toda.
+// Todas as funções abaixo aceitam uma lista `sectorIds` opcional: quando
+// informada (gestor de um contrato = 1 item; Diretoria/Superintendência
+// escopada a um grupo = vários), os números só consideram esses contratos.
+// Quando omitida (admin geral, ou Diretoria/Superintendência sem grupo
+// definido), consideram a empresa toda.
 
 function round(n: number | string | null): number {
   if (n === null) return 0;
   return Math.round(Number(n));
 }
 
-export async function getSectorSummary(sectorId?: number): Promise<SummaryRow[]> {
-  const scope = sectorId !== undefined ? eq(sectors.id, sectorId) : undefined;
+export async function getSectorSummary(sectorIds?: number[]): Promise<SummaryRow[]> {
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(sectors.id, sectorIds) : undefined;
   const rows = await db
     .select({
       id: sectors.id,
@@ -59,8 +61,8 @@ export async function getSectorSummary(sectorId?: number): Promise<SummaryRow[]>
   }));
 }
 
-export async function getRoleSummary(sectorId?: number): Promise<SummaryRow[]> {
-  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+export async function getRoleSummary(sectorIds?: number[]): Promise<SummaryRow[]> {
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
   const rows = await db
     .select({
       id: roles.id,
@@ -87,9 +89,9 @@ export async function getRoleSummary(sectorId?: number): Promise<SummaryRow[]> {
 }
 
 export async function getEmployeeSummary(
-  sectorId?: number,
+  sectorIds?: number[],
 ): Promise<(SummaryRow & { sectorName: string; roleName: string })[]> {
-  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
   const rows = await db
     .select({
       id: employees.id,
@@ -121,8 +123,8 @@ export async function getEmployeeSummary(
   }));
 }
 
-export async function getTopicSummary(sectorId?: number): Promise<TopicRow[]> {
-  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+export async function getTopicSummary(sectorIds?: number[]): Promise<TopicRow[]> {
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
   const rows = await db
     .select({
       topic: questions.topic,
@@ -151,8 +153,8 @@ export async function getTopicSummary(sectorId?: number): Promise<TopicRow[]> {
     .sort((a, b) => a.accuracy - b.accuracy);
 }
 
-export async function getTopicBySector(sectorId?: number): Promise<TopicByGroupRow[]> {
-  const scope = sectorId !== undefined ? eq(sectors.id, sectorId) : undefined;
+export async function getTopicBySector(sectorIds?: number[]): Promise<TopicByGroupRow[]> {
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(sectors.id, sectorIds) : undefined;
   const rows = await db
     .select({
       groupId: sectors.id,
@@ -186,8 +188,8 @@ export async function getTopicBySector(sectorId?: number): Promise<TopicByGroupR
     .sort((a, b) => a.accuracy - b.accuracy);
 }
 
-export async function getTopicByRole(sectorId?: number): Promise<TopicByGroupRow[]> {
-  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+export async function getTopicByRole(sectorIds?: number[]): Promise<TopicByGroupRow[]> {
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
   const rows = await db
     .select({
       groupId: roles.id,
@@ -230,8 +232,8 @@ export type DocumentTypeRow = {
 // Compara o desempenho médio em provas de IT (Instrução de Trabalho) x APR
 // (Análise Preliminar de Risco) — ajuda a apontar se o problema está mais no
 // "como fazer" (IT) ou no "quais riscos existem" (APR).
-export async function getDocumentTypeSummary(sectorId?: number): Promise<DocumentTypeRow[]> {
-  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+export async function getDocumentTypeSummary(sectorIds?: number[]): Promise<DocumentTypeRow[]> {
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
   const rows = await db
     .select({
       documentType: exams.documentType,
@@ -255,8 +257,8 @@ export async function getDocumentTypeSummary(sectorId?: number): Promise<Documen
 // Tempo médio (em minutos) que os colaboradores levam pra terminar uma
 // prova — calculado a partir de startedAt/finishedAt, sem precisar de coluna
 // nova no banco.
-export async function getAvgDurationMinutes(sectorId?: number): Promise<number> {
-  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+export async function getAvgDurationMinutes(sectorIds?: number[]): Promise<number> {
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
   const [row] = await db
     .select({
       avgSeconds: sql<number | null>`avg(extract(epoch from (${attempts.finishedAt} - ${attempts.startedAt})))`,
@@ -280,8 +282,8 @@ export type TenureSummaryRow = {
 // Desempenho agrupado por tempo de empresa (faixas fixas cadastradas no
 // autocadastro) — ajuda a ver se colaboradores mais novos de casa erram mais
 // que os veteranos.
-export async function getTenureSummary(sectorId?: number): Promise<TenureSummaryRow[]> {
-  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+export async function getTenureSummary(sectorIds?: number[]): Promise<TenureSummaryRow[]> {
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
   const rows = await db
     .select({
       code: employees.tempoDeEmpresa,
@@ -316,9 +318,9 @@ export type TrendPoint = {
 
 // Média de nota por dia nos últimos `days` dias — pra visualizar se o
 // desempenho geral está melhorando ou piorando ao longo do tempo.
-export async function getScoreTrend(days = 30, sectorId?: number): Promise<TrendPoint[]> {
+export async function getScoreTrend(days = 30, sectorIds?: number[]): Promise<TrendPoint[]> {
   const sinceExpr = sql`now() - (${days}::text || ' days')::interval`;
-  const scope = sectorId !== undefined ? eq(employees.sectorId, sectorId) : undefined;
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
   const dateExpr = sql<string>`to_char(${attempts.finishedAt}, 'YYYY-MM-DD')`;
 
   const rows = await db
@@ -362,9 +364,9 @@ export async function getAttemptsByExam(examId: number) {
     .orderBy(sql`${attempts.finishedAt} desc nulls last`);
 }
 
-export async function getRecentAttempts(limit = 30, sectorId?: number) {
+export async function getRecentAttempts(limit = 30, sectorIds?: number[]) {
   const conditions: SQL[] = [isNotNull(attempts.finishedAt)];
-  if (sectorId !== undefined) conditions.push(eq(employees.sectorId, sectorId));
+  if (sectorIds && sectorIds.length > 0) conditions.push(inArray(employees.sectorId, sectorIds));
 
   return db
     .select({

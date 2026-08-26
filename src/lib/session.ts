@@ -12,13 +12,23 @@ export type AdminRole = "admin" | "diretoria" | "superintendencia" | "gestor";
 export type AdminSessionData = {
   adminId: number;
   username: string;
-  // null = enxerga todos os Contratos (role "admin", "diretoria" ou
-  // "superintendencia"). Número = gestor travado no próprio contrato (Setor).
+  // Nome de exibição amigável (ex.: "Diretoria de Operações"). null = usa o
+  // username mesmo nas telas.
+  label: string | null;
+  // null = enxerga todos os Contratos (role "admin", ou "diretoria"/
+  // "superintendencia" sem grupo definido). Número = gestor travado no
+  // próprio contrato (Setor) — ou, pra Diretoria/Superintendência escopada,
+  // o primeiro Contrato do grupo (só de referência/exibição).
   sectorId: number | null;
   sectorName: string | null;
+  // Preenchido SÓ para Diretoria/Superintendência restrita a um GRUPO
+  // específico de Contratos (ex.: ARM RIO+TPS+SPOT+EQUINOR). null = sem
+  // grupo, enxerga todos os Contratos.
+  sectorIds: number[] | null;
   // "admin" = super admin, edita tudo. "diretoria" e "superintendencia" veem
-  // tudo, só leitura (mesmo nível de visão, sem poder de edição). "gestor" =
-  // só o próprio Contrato, com escrita normal nele.
+  // tudo (ou o grupo de Contratos definido em sectorIds), só leitura (mesmo
+  // nível de visão, sem poder de edição). "gestor" = só o próprio Contrato,
+  // com escrita normal nele.
   role: AdminRole;
 };
 export type EmployeeSessionData = {

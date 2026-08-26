@@ -30,31 +30,31 @@ function ContractTile({ sector, onClick }: { sector: Sector; onClick: (label: st
       onClick={() => onClick(sector.name)}
       className="group flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-6 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
     >
-      <div className="flex h-16 w-full items-center justify-center">
+      <div className="flex h-24 w-full items-center justify-center">
         {branding.kind === "client" && (
           <Image
             src={branding.logoSrc}
             alt={branding.clientName}
-            width={140}
-            height={56}
-            className="max-h-14 w-auto object-contain"
+            width={200}
+            height={80}
+            className="max-h-20 w-auto object-contain"
           />
         )}
         {branding.kind === "combo" && (
-          <div className="relative flex h-16 w-full items-center justify-center">
+          <div className="flex h-24 w-full items-center justify-center gap-3">
             <Image
               src="/logos/triunfo_mark.png"
               alt="Triunfo"
-              width={52}
-              height={52}
-              className="h-12 w-12 object-contain"
+              width={80}
+              height={80}
+              className="h-16 w-16 object-contain"
             />
             <Image
               src={branding.logoSrc}
               alt={branding.clientName}
-              width={40}
-              height={40}
-              className="absolute -bottom-1 -right-1 h-6 w-auto rounded bg-white object-contain ring-2 ring-white"
+              width={100}
+              height={80}
+              className="max-h-16 w-auto object-contain"
             />
           </div>
         )}
@@ -62,9 +62,9 @@ function ContractTile({ sector, onClick }: { sector: Sector; onClick: (label: st
           <Image
             src="/logos/triunfo_mark.png"
             alt="Triunfo"
-            width={52}
-            height={52}
-            className="h-12 w-12 object-contain"
+            width={80}
+            height={80}
+            className="h-16 w-16 object-contain"
           />
         )}
       </div>

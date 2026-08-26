@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, sectors, exams } from "@/db/schema";
-import { requireAdmin, requireEditor, canAccessSector } from "@/lib/requireAdmin";
+import { requireAdmin, requireEditor, canAccessSector, getVisibleSectorIds } from "@/lib/requireAdmin";
 import { extractPdfText } from "@/lib/pdf";
 
 export const maxDuration = 60;
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024; // 15MB
 
-// GET: lista os PDFs já salvos na biblioteca (escopado por contrato do gestor).
+// GET: lista os PDFs já salvos na biblioteca (escopado por contrato do
+// gestor, ou pelo grupo de Contratos da Diretoria/Superintendência).
 export async function GET() {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
-  const scope = guard.admin.sectorId !== null ? eq(documents.sectorId, guard.admin.sectorId) : undefined;
+  const visibleSectorIds = getVisibleSectorIds(guard.admin);
+  const scope = visibleSectorIds ? inArray(documents.sectorId, visibleSectorIds) : undefined;
 
   const list = await db
     .select({

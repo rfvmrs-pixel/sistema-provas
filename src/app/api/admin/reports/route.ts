@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/requireAdmin";
+import { requireAdmin, getVisibleSectorIds } from "@/lib/requireAdmin";
 import {
   getSectorSummary,
   getRoleSummary,
@@ -14,17 +14,17 @@ export async function GET() {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
-  const sectorId = guard.admin.sectorId ?? undefined;
+  const sectorIds = getVisibleSectorIds(guard.admin);
 
   const [sectorSummary, roleSummary, employeeSummary, topicSummary, topicBySector, topicByRole, recentAttempts] =
     await Promise.all([
-      getSectorSummary(sectorId),
-      getRoleSummary(sectorId),
-      getEmployeeSummary(sectorId),
-      getTopicSummary(sectorId),
-      getTopicBySector(sectorId),
-      getTopicByRole(sectorId),
-      getRecentAttempts(30, sectorId),
+      getSectorSummary(sectorIds),
+      getRoleSummary(sectorIds),
+      getEmployeeSummary(sectorIds),
+      getTopicSummary(sectorIds),
+      getTopicBySector(sectorIds),
+      getTopicByRole(sectorIds),
+      getRecentAttempts(30, sectorIds),
     ]);
 
   return NextResponse.json({

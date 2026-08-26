@@ -21,12 +21,17 @@ export const sectors = pgTable("sectors", {
 });
 
 // ---------- Admins ----------
-// sectorId = null  -> enxerga todos os Contratos. role decide o que pode FAZER:
+// sectorId = null  -> enxerga todos os Contratos (a menos que existam linhas
+//                      em admin_sectors — ver abaixo). role decide o que pode FAZER:
 //   role "admin"     -> admin geral: enxerga e gerencia (cria/edita/exclui) tudo,
 //                       inclusive Contratos e contas de gestor/diretoria.
-//   role "diretoria" -> mesma visão de todos os Contratos e estatísticas da
-//                       empresa, mas SÓ VISUALIZA — todo endpoint de escrita
-//                       (requireEditor) bloqueia esse role.
+//   role "diretoria"/"superintendencia" -> SÓ VISUALIZA (todo endpoint de
+//                       escrita via requireEditor bloqueia os dois). Por
+//                       padrão (sem linhas em admin_sectors) enxergam TODOS os
+//                       Contratos. Se tiverem linhas em admin_sectors, ficam
+//                       restritos a esse GRUPO de Contratos (ex.: "Diretoria
+//                       de Operações" = ARM RIO+TPS+SPOT+EQUINOR) — diferente
+//                       do gestor, que é sempre travado num único Contrato.
 // sectorId = X, role "gestor" -> só enxerga/gerencia o próprio contrato (Setor),
 //                       com permissão de escrita normal dentro dele.
 export const admins = pgTable("admins", {
@@ -35,8 +40,30 @@ export const admins = pgTable("admins", {
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   sectorId: integer("sector_id").references(() => sectors.id, { onDelete: "cascade" }),
   role: varchar("role", { length: 20 }).default("gestor").notNull(),
+  // Nome de exibição amigável (ex.: "Diretoria de Operações"). Opcional — se
+  // vazio, a tela mostra o username mesmo. Usado principalmente pras contas
+  // de Diretoria/Superintendência escopadas a um grupo de Contratos.
+  label: varchar("label", { length: 150 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// Grupo de Contratos que uma conta de Diretoria/Superintendência enxerga —
+// só é usado quando essa Diretoria é restrita a um subconjunto específico de
+// Contratos (não a empresa toda). Sem linhas aqui pra um admin = sem
+// restrição (comportamento padrão anterior, vale a empresa toda).
+export const adminSectors = pgTable(
+  "admin_sectors",
+  {
+    id: serial("id").primaryKey(),
+    adminId: integer("admin_id")
+      .notNull()
+      .references(() => admins.id, { onDelete: "cascade" }),
+    sectorId: integer("sector_id")
+      .notNull()
+      .references(() => sectors.id, { onDelete: "cascade" }),
+  },
+  (t) => [uniqueIndex("admin_sectors_admin_sector_idx").on(t.adminId, t.sectorId)],
+);
 
 // ---------- Funções ----------
 export const roles = pgTable("roles", {
@@ -297,8 +324,14 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
   exams: many(exams),
 }));
 
-export const adminsRelations = relations(admins, ({ one }) => ({
+export const adminsRelations = relations(admins, ({ one, many }) => ({
   sector: one(sectors, { fields: [admins.sectorId], references: [sectors.id] }),
+  sectorLinks: many(adminSectors),
+}));
+
+export const adminSectorsRelations = relations(adminSectors, ({ one }) => ({
+  admin: one(admins, { fields: [adminSectors.adminId], references: [admins.id] }),
+  sector: one(sectors, { fields: [adminSectors.sectorId], references: [sectors.id] }),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({

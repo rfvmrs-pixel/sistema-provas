@@ -64,8 +64,22 @@ export async function requireEditor(): Promise<
   return guard;
 }
 
+// Lista de Contratos que o admin logado enxerga, ou `undefined` quando não
+// há restrição (enxerga a empresa toda): admin geral, e Diretoria/
+// Superintendência sem grupo definido (sectorIds null). Gestor sempre volta
+// um array de 1 item (o próprio Contrato); Diretoria/Superintendência
+// escopada a um grupo volta os Contratos desse grupo.
+export function getVisibleSectorIds(admin: AdminSessionData): number[] | undefined {
+  if (admin.sectorIds && admin.sectorIds.length > 0) return admin.sectorIds;
+  if (admin.sectorId !== null) return [admin.sectorId];
+  return undefined;
+}
+
 // true se o admin logado pode ver/gerenciar dados do contrato `sectorId`:
-// admin geral (sectorId null) vê tudo; gestor de contrato só vê o próprio.
+// sem restrição (undefined) vê tudo; senão só se `sectorId` estiver na lista
+// de Contratos visíveis (gestor: só o próprio; Diretoria/Superintendência
+// escopada: os do grupo dela).
 export function canAccessSector(admin: AdminSessionData, sectorId: number): boolean {
-  return admin.sectorId === null || admin.sectorId === sectorId;
+  const visible = getVisibleSectorIds(admin);
+  return visible === undefined || visible.includes(sectorId);
 }

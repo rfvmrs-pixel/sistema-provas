@@ -38,9 +38,12 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
               <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <Image src="/logos/triunfo_mark.png" alt="" width={22} height={22} className="shrink-0" />
                 Triunfo Skill
-                {admin.sectorName && (
+                {(admin.label || admin.sectorName) && (
                   <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    {admin.sectorName}
+                    {admin.label ||
+                      (admin.sectorIds && admin.sectorIds.length > 1
+                        ? `${admin.sectorIds.length} Contratos`
+                        : admin.sectorName)}
                   </span>
                 )}
               </span>

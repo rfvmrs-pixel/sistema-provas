@@ -10,6 +10,7 @@ import {
   getTenureSummary,
 } from "@/lib/reports";
 import { getAdminSession } from "@/lib/session";
+import { getVisibleSectorIds } from "@/lib/requireAdmin";
 import { MeterBarList } from "@/components/charts/MeterBar";
 import { TrendLineChart } from "@/components/charts/TrendLineChart";
 
@@ -37,10 +38,11 @@ function Card({ label, value }: { label: string; value: string | number }) {
 }
 
 export default async function AdminDashboardPage() {
-  // Gestor de contrato só pode ver os números do próprio Contrato — admin
-  // geral e Diretoria (sectorId null) veem a empresa toda.
+  // Gestor de contrato só pode ver os números do próprio Contrato; Diretoria/
+  // Superintendência escopada a um grupo só vê os do grupo dela — admin
+  // geral e Diretoria/Superintendência sem grupo definido veem a empresa toda.
   const admin = await getAdminSession();
-  const sectorId = admin?.sectorId ?? undefined;
+  const sectorIds = admin ? getVisibleSectorIds(admin) : undefined;
 
   const [
     sectorSummary,
@@ -53,15 +55,15 @@ export default async function AdminDashboardPage() {
     avgDurationMinutes,
     tenureSummary,
   ] = await Promise.all([
-    getSectorSummary(sectorId),
-    getRoleSummary(sectorId),
-    getEmployeeSummary(sectorId),
-    getTopicSummary(sectorId),
-    getRecentAttempts(15, sectorId),
-    getDocumentTypeSummary(sectorId),
-    getScoreTrend(30, sectorId),
-    getAvgDurationMinutes(sectorId),
-    getTenureSummary(sectorId),
+    getSectorSummary(sectorIds),
+    getRoleSummary(sectorIds),
+    getEmployeeSummary(sectorIds),
+    getTopicSummary(sectorIds),
+    getRecentAttempts(15, sectorIds),
+    getDocumentTypeSummary(sectorIds),
+    getScoreTrend(30, sectorIds),
+    getAvgDurationMinutes(sectorIds),
+    getTenureSummary(sectorIds),
   ]);
 
   const totalAttempts = employeeSummary.reduce((acc, e) => acc + e.attemptCount, 0);

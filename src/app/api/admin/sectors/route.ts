@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { sectors, admins } from "@/db/schema";
-import { requireAdmin, requireSuperAdmin } from "@/lib/requireAdmin";
+import { requireAdmin, requireSuperAdmin, getVisibleSectorIds } from "@/lib/requireAdmin";
 import { hashPassword } from "@/lib/password";
 
 // "Setor" = "Contrato" na linguagem do dia a dia (TPS, EQUINOR, LON1...).
-// Gestor de contrato (admin.sectorId setado) só enxerga o próprio contrato
-// aqui — é o que popula os <select> de Setor nas telas de Provas/Funcionários.
+// Gestor de contrato só enxerga o próprio contrato aqui; Diretoria/
+// Superintendência escopada a um grupo só enxerga os do grupo dela — é o
+// que popula os <select> de Setor nas telas de Provas/Funcionários/Biblioteca.
 export async function GET() {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
-  const list =
-    guard.admin.sectorId !== null
-      ? await db.select().from(sectors).where(eq(sectors.id, guard.admin.sectorId))
-      : await db.select().from(sectors).orderBy(asc(sectors.name));
+  const visibleSectorIds = getVisibleSectorIds(guard.admin);
+  const list = visibleSectorIds
+    ? await db.select().from(sectors).where(inArray(sectors.id, visibleSectorIds)).orderBy(asc(sectors.name))
+    : await db.select().from(sectors).orderBy(asc(sectors.name));
 
   return NextResponse.json({ sectors: list });
 }

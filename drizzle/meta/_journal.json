@@ -57,6 +57,13 @@
       "when": 1787767841375,
       "tag": "0007_document_type",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787775751244,
+      "tag": "0008_director_sector_groups",
+      "breakpoints": true
     }
   ]
 }

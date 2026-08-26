@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { exams, questions, attempts, sectors, roles, documents } from "@/db/schema";
-import { requireAdmin, requireEditor, canAccessSector } from "@/lib/requireAdmin";
+import { requireAdmin, requireEditor, canAccessSector, getVisibleSectorIds } from "@/lib/requireAdmin";
 import { generateExamFromText, type DocumentType } from "@/lib/ai";
 
 export const maxDuration = 120;
@@ -21,7 +21,8 @@ export async function GET() {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
-  const scope = guard.admin.sectorId !== null ? eq(exams.sectorId, guard.admin.sectorId) : undefined;
+  const visibleSectorIds = getVisibleSectorIds(guard.admin);
+  const scope = visibleSectorIds ? inArray(exams.sectorId, visibleSectorIds) : undefined;
 
   const list = await db
     .select({

@@ -5,7 +5,13 @@ import { useEffect, useState } from "react";
 type Sector = { id: number; name: string };
 type Gestor = { id: number; username: string };
 type DirectorRole = "diretoria" | "superintendencia";
-type Director = { id: number; username: string; role: DirectorRole };
+type Director = {
+  id: number;
+  username: string;
+  label: string | null;
+  role: DirectorRole;
+  sectors: { id: number; name: string }[];
+};
 
 export default function ContratosPage() {
   const [sectors, setSectors] = useState<Sector[]>([]);
@@ -25,8 +31,16 @@ export default function ContratosPage() {
   const [directorUsername, setDirectorUsername] = useState("");
   const [directorPassword, setDirectorPassword] = useState("");
   const [directorRole, setDirectorRole] = useState<DirectorRole>("diretoria");
+  const [directorLabel, setDirectorLabel] = useState("");
+  // Vazio = sem restrição (enxerga todos os Contratos). Marcando um ou mais,
+  // a conta fica travada só nesse grupo (ex.: "Diretoria de Operações").
+  const [directorSectorIds, setDirectorSectorIds] = useState<number[]>([]);
   const [savingDirector, setSavingDirector] = useState(false);
   const [directorError, setDirectorError] = useState<string | null>(null);
+
+  function toggleDirectorSector(id: number) {
+    setDirectorSectorIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   async function load() {
     setLoading(true);
@@ -67,7 +81,13 @@ export default function ContratosPage() {
       const res = await fetch("/api/admin/directors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: directorUsername, password: directorPassword, role: directorRole }),
+        body: JSON.stringify({
+          username: directorUsername,
+          password: directorPassword,
+          role: directorRole,
+          label: directorLabel || undefined,
+          sectorIds: directorSectorIds,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -76,6 +96,8 @@ export default function ContratosPage() {
       }
       setDirectorUsername("");
       setDirectorPassword("");
+      setDirectorLabel("");
+      setDirectorSectorIds([]);
       load();
     } finally {
       setSavingDirector(false);
@@ -242,47 +264,90 @@ export default function ContratosPage() {
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Contas de Diretoria / Superintendência</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Enxergam todos os Contratos e as estatísticas da empresa como um todo, igual ao admin
-          geral — mas são somente leitura: não criam, editam ou excluem nada. Os dois tipos têm o
-          mesmo nível de acesso, só muda o rótulo mostrado pra conta.
+          São somente leitura: não criam, editam ou excluem nada. Por padrão enxergam todos os
+          Contratos e as estatísticas da empresa como um todo, igual ao admin geral — mas você pode
+          marcar abaixo um GRUPO específico de Contratos (ex.: "Diretoria de Operações" = ARM RIO +
+          TPS + SPOT + EQUINOR) pra essa conta ver só aquele grupo. Sem nenhum Contrato marcado =
+          sem restrição, vê tudo. Os dois tipos (Diretoria/Superintendência) têm o mesmo nível de
+          acesso, só muda o rótulo mostrado pra conta.
         </p>
       </div>
 
       <form
         onSubmit={handleAddDirector}
-        className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-4"
+        className="space-y-4 rounded-xl border border-slate-200 bg-white p-5"
       >
-        <input
-          value={directorUsername}
-          onChange={(e) => setDirectorUsername(e.target.value)}
-          placeholder="Usuário"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-          required
-        />
-        <input
-          type="password"
-          value={directorPassword}
-          onChange={(e) => setDirectorPassword(e.target.value)}
-          placeholder="Senha"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-          required
-        />
-        <select
-          value={directorRole}
-          onChange={(e) => setDirectorRole(e.target.value as DirectorRole)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-        >
-          <option value="diretoria">Diretoria</option>
-          <option value="superintendencia">Superintendência</option>
-        </select>
-        <button
-          disabled={savingDirector || !directorUsername || !directorPassword}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-        >
-          {savingDirector ? "Salvando..." : "Criar/redefinir conta"}
-        </button>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <input
+            value={directorUsername}
+            onChange={(e) => setDirectorUsername(e.target.value)}
+            placeholder="Usuário (login)"
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            required
+          />
+          <input
+            type="password"
+            value={directorPassword}
+            onChange={(e) => setDirectorPassword(e.target.value)}
+            placeholder="Senha"
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            required
+          />
+          <input
+            value={directorLabel}
+            onChange={(e) => setDirectorLabel(e.target.value)}
+            placeholder="Nome de exibição (ex.: Diretoria de Operações)"
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+          />
+          <select
+            value={directorRole}
+            onChange={(e) => setDirectorRole(e.target.value as DirectorRole)}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+          >
+            <option value="diretoria">Diretoria</option>
+            <option value="superintendencia">Superintendência</option>
+          </select>
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-slate-600">
+            Contratos que essa conta enxerga (nenhum marcado = todos):
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {sectors.map((s) => {
+              const checked = directorSectorIds.includes(s.id);
+              return (
+                <label
+                  key={s.id}
+                  className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium ${
+                    checked
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleDirectorSector(s.id)}
+                    className="hidden"
+                  />
+                  {s.name}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            disabled={savingDirector || !directorUsername || !directorPassword}
+            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          >
+            {savingDirector ? "Salvando..." : "Criar/redefinir conta"}
+          </button>
+          {directorError && <p className="text-sm text-red-600">{directorError}</p>}
+        </div>
       </form>
-      {directorError && <p className="text-sm text-red-600">{directorError}</p>}
 
       <div className="rounded-xl border border-slate-200 bg-white">
         {directors.length === 0 ? (
@@ -291,7 +356,15 @@ export default function ContratosPage() {
           <ul className="divide-y divide-slate-100">
             {directors.map((d) => (
               <li key={d.id} className="flex items-center justify-between px-5 py-3 text-sm text-slate-800">
-                {d.username}
+                <div>
+                  <div className="font-medium">{d.label || d.username}</div>
+                  <div className="text-xs text-slate-500">
+                    {d.label ? `usuário: ${d.username} · ` : ""}
+                    {d.sectors.length === 0
+                      ? "Todos os Contratos"
+                      : d.sectors.map((s) => s.name).join(", ")}
+                  </div>
+                </div>
                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                   {d.role === "superintendencia" ? "Superintendência" : "Diretoria"}
                 </span>

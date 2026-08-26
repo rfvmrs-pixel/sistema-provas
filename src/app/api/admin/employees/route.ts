@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { employees, sectors, roles } from "@/db/schema";
-import { requireAdmin, requireEditor, canAccessSector } from "@/lib/requireAdmin";
+import { requireAdmin, requireEditor, canAccessSector, getVisibleSectorIds } from "@/lib/requireAdmin";
 import { hashPassword } from "@/lib/password";
 
 export async function GET() {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
-  const scope = guard.admin.sectorId !== null ? eq(employees.sectorId, guard.admin.sectorId) : undefined;
+  const visibleSectorIds = getVisibleSectorIds(guard.admin);
+  const scope = visibleSectorIds ? inArray(employees.sectorId, visibleSectorIds) : undefined;
 
   const list = await db
     .select({
