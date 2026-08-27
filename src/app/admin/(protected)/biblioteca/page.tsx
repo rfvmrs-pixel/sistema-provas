@@ -27,12 +27,17 @@ export default function BibliotecaPage() {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Upload — aceita vários PDFs de uma vez, todos pro mesmo Contrato,
-  // enviados um por um em sequência pro endpoint (que só recebe 1 arquivo
-  // por chamada).
+  // Upload — no modo "novo" aceita vários PDFs de uma vez, todos pro mesmo
+  // Contrato, enviados um por um em sequência pro endpoint (que só recebe 1
+  // arquivo por chamada). No modo "atualização" é sempre 1 arquivo, que
+  // substitui o PDF de um documento já existente na biblioteca (mesmo
+  // registro — mantém as provas já geradas ligadas a ele).
+  type UploadMode = "novo" | "atualizacao";
+  const [uploadMode, setUploadMode] = useState<UploadMode>("novo");
   const [files, setFiles] = useState<File[]>([]);
   const [uploadSectorId, setUploadSectorId] = useState("");
   const [uploadDocumentType, setUploadDocumentType] = useState<DocumentType>("IT");
+  const [updateTargetId, setUpdateTargetId] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(
@@ -67,6 +72,34 @@ export default function BibliotecaPage() {
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
+
+    if (uploadMode === "atualizacao") {
+      if (files.length !== 1 || !updateTargetId) return;
+      setUploadError(null);
+      setUploading(true);
+      try {
+        const form = new FormData();
+        form.append("file", files[0]);
+        form.append("documentType", uploadDocumentType);
+        const res = await fetch(`/api/admin/documents/${updateTargetId}`, { method: "PUT", body: form });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}) as { error?: string });
+          setUploadError(data.error || "Falha ao atualizar o documento.");
+          return;
+        }
+        setFiles([]);
+        setUpdateTargetId("");
+        (document.getElementById("pdf-input") as HTMLInputElement | null)?.value &&
+          ((document.getElementById("pdf-input") as HTMLInputElement).value = "");
+        load();
+      } catch {
+        setUploadError("Erro de conexão. Tente novamente.");
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+
     if (files.length === 0 || !uploadSectorId) return;
     setUploadError(null);
     setUploading(true);
@@ -102,6 +135,14 @@ export default function BibliotecaPage() {
       setUploadProgress(null);
     }
   }
+
+  // Candidatos pra "atualização": documentos já salvos, filtrados pelo
+  // Contrato/Tipo escolhidos (quando informados) — evita listar centenas de
+  // PDFs de outros Contratos na hora de escolher qual vai ser substituído.
+  const updateCandidates = documents
+    .filter((d) => !uploadSectorId || String(d.sectorId) === uploadSectorId)
+    .filter((d) => d.documentType === uploadDocumentType)
+    .sort((a, b) => a.fileName.localeCompare(b.fileName));
 
   async function handleDeleteDocument(doc: Document) {
     if (
@@ -180,20 +221,58 @@ export default function BibliotecaPage() {
       )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-slate-900">Enviar novo(s) PDF(s)</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Enviar PDF</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Suba um ou vários PDFs de uma vez e identifique o Tipo e o Contrato (os mesmos pra
-          todos). O Tipo é o que permite filtrar depois, tanto aqui quanto na hora de gerar a
-          prova.
+          Documento novo entra como um item novo na biblioteca. Atualização substitui o PDF de um
+          documento já salvo (mantém as provas já geradas ligadas a ele — só o arquivo/texto muda).
         </p>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setUploadMode("novo");
+              setFiles([]);
+              setUpdateTargetId("");
+              (document.getElementById("pdf-input") as HTMLInputElement | null)?.value &&
+                ((document.getElementById("pdf-input") as HTMLInputElement).value = "");
+            }}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              uploadMode === "novo"
+                ? "bg-slate-900 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            Documento novo
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setUploadMode("atualizacao");
+              setFiles([]);
+              (document.getElementById("pdf-input") as HTMLInputElement | null)?.value &&
+                ((document.getElementById("pdf-input") as HTMLInputElement).value = "");
+            }}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              uploadMode === "atualizacao"
+                ? "bg-slate-900 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            Atualização de PDF existente
+          </button>
+        </div>
+
         <form onSubmit={handleUpload} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="block text-xs font-medium text-slate-700">Arquivo(s) PDF</label>
+            <label className="block text-xs font-medium text-slate-700">
+              {uploadMode === "atualizacao" ? "Novo arquivo PDF" : "Arquivo(s) PDF"}
+            </label>
             <input
               id="pdf-input"
               type="file"
               accept="application/pdf"
-              multiple
+              multiple={uploadMode === "novo"}
               onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
               className="mt-1 w-full text-sm"
               required
@@ -208,7 +287,10 @@ export default function BibliotecaPage() {
             <label className="block text-xs font-medium text-slate-700">Tipo de documento</label>
             <select
               value={uploadDocumentType}
-              onChange={(e) => setUploadDocumentType(e.target.value as DocumentType)}
+              onChange={(e) => {
+                setUploadDocumentType(e.target.value as DocumentType);
+                setUpdateTargetId("");
+              }}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
               required
             >
@@ -220,12 +302,15 @@ export default function BibliotecaPage() {
             <label className="block text-xs font-medium text-slate-700">Contrato</label>
             <select
               value={uploadSectorId}
-              onChange={(e) => setUploadSectorId(e.target.value)}
+              onChange={(e) => {
+                setUploadSectorId(e.target.value);
+                setUpdateTargetId("");
+              }}
               disabled={sectors.length === 1}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500"
-              required
+              required={uploadMode === "novo"}
             >
-              <option value="">Selecione...</option>
+              <option value="">{uploadMode === "atualizacao" ? "Todos" : "Selecione..."}</option>
               {sectors.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -233,16 +318,52 @@ export default function BibliotecaPage() {
               ))}
             </select>
           </div>
+          {uploadMode === "atualizacao" && (
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-slate-700">
+                Documento que vai ser substituído
+              </label>
+              <select
+                value={updateTargetId}
+                onChange={(e) => setUpdateTargetId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                required
+              >
+                <option value="">Selecione o PDF a atualizar...</option>
+                {updateCandidates.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.fileName} — {d.sectorName} ·{" "}
+                    {new Date(d.uploadedAt).toLocaleDateString("pt-BR")}
+                  </option>
+                ))}
+              </select>
+              {updateCandidates.length === 0 && (
+                <p className="mt-1 text-xs text-slate-400">
+                  Nenhum PDF do tipo/contrato selecionado pra atualizar ainda — ajuste os filtros
+                  acima ou envie como documento novo.
+                </p>
+              )}
+            </div>
+          )}
           <div className="sm:col-span-2">
             <button
-              disabled={isReadOnly || uploading || files.length === 0 || !uploadSectorId}
+              disabled={
+                isReadOnly ||
+                uploading ||
+                files.length === 0 ||
+                (uploadMode === "novo" ? !uploadSectorId : !updateTargetId || files.length !== 1)
+              }
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
             >
               {uploading
-                ? `Enviando ${uploadProgress?.done ?? 0}/${uploadProgress?.total ?? files.length}...`
-                : files.length > 1
-                  ? `Salvar ${files.length} PDFs`
-                  : "Salvar PDF"}
+                ? uploadMode === "atualizacao"
+                  ? "Atualizando..."
+                  : `Enviando ${uploadProgress?.done ?? 0}/${uploadProgress?.total ?? files.length}...`
+                : uploadMode === "atualizacao"
+                  ? "Substituir PDF"
+                  : files.length > 1
+                    ? `Salvar ${files.length} PDFs`
+                    : "Salvar PDF"}
             </button>
           </div>
         </form>

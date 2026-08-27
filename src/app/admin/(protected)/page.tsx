@@ -12,6 +12,7 @@ import {
 import { getAdminSession } from "@/lib/session";
 import { getVisibleSectorIds } from "@/lib/requireAdmin";
 import { MeterBarList } from "@/components/charts/MeterBar";
+import { BarChart } from "@/components/charts/BarChart";
 import { TrendLineChart } from "@/components/charts/TrendLineChart";
 
 function ScoreBadge({ value }: { value: number }) {
@@ -153,7 +154,7 @@ export default async function AdminDashboardPage() {
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">Desempenho por setor</h2>
           <div className="mt-4">
-            <MeterBarList
+            <BarChart
               emptyMessage="Nenhum contrato cadastrado."
               items={sectorSummary.map((s) => ({
                 id: s.id,
@@ -168,7 +169,7 @@ export default async function AdminDashboardPage() {
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">Desempenho por função</h2>
           <div className="mt-4">
-            <MeterBarList
+            <BarChart
               emptyMessage="Nenhuma função cadastrada."
               items={roleSummary.map((r) => ({
                 id: r.id,
