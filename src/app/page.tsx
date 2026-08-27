@@ -113,31 +113,6 @@ function IconGear({ className }: { className?: string }) {
   );
 }
 
-function IconKey({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className={className}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10 17.75H7.75v2.25H5.5v2.25H2v-3l5.408-5.408c.403-.404.526-1 .429-1.563a6 6 0 0 1 7.913-6.729Z"
-      />
-    </svg>
-  );
-}
-
-function IconEye({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className={className}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
-      />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-    </svg>
-  );
-}
-
 function ContractTile({ sector, onClick }: { sector: Sector; onClick: (label: string) => void }) {
   const branding = getContractBranding(sector.name);
 
@@ -555,7 +530,13 @@ export default function HomePage() {
                         provas, colaboradores, contas de gestor/Diretoria). */}
                     <div className="flex flex-col items-center gap-3 rounded-2xl bg-slate-900 px-6 py-7 text-center shadow-sm">
                       <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10">
-                        <IconKey className="h-7 w-7 text-white" />
+                        <Image
+                          src={TRIUNFO_MARK}
+                          alt=""
+                          width={32}
+                          height={32}
+                          className="h-8 w-8 object-contain brightness-0 invert"
+                        />
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-white">Admin</p>
@@ -583,7 +564,13 @@ export default function HomePage() {
                         className="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-6 py-7 text-center shadow-sm"
                       >
                         <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-slate-200">
-                          <IconEye className="h-7 w-7 text-slate-500" />
+                          <Image
+                            src={TRIUNFO_MARK}
+                            alt=""
+                            width={32}
+                            height={32}
+                            className="h-8 w-8 object-contain"
+                          />
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{group.label}</p>
