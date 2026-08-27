@@ -624,12 +624,13 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
                 <th className="pb-2">Modo</th>
                 <th className="pb-2">Data</th>
                 <th className="pb-2">Nota</th>
+                <th className="pb-2"></th>
               </tr>
             </thead>
             <tbody>
               {attempts.length === 0 && (
                 <tr>
-                  <td className="py-3 text-slate-400" colSpan={6}>
+                  <td className="py-3 text-slate-400" colSpan={7}>
                     Ninguém respondeu essa prova ainda.
                   </td>
                 </tr>
@@ -654,6 +655,18 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
                   </td>
                   <td className="py-2 text-slate-500">
                     {a.percentage !== null ? `${a.percentage}%` : "-"}
+                  </td>
+                  <td className="py-2 text-right">
+                    {a.finishedAt && (
+                      <a
+                        href={`/api/admin/attempts/${a.id}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="whitespace-nowrap text-xs font-medium text-slate-600 hover:underline"
+                      >
+                        Exportar PDF
+                      </a>
+                    )}
                   </td>
                 </tr>
               ))}
