@@ -22,7 +22,14 @@ type Mode = "simulado" | "oficial";
 type Step =
   | { kind: "login" }
   | { kind: "list"; employeeName: string; mode: Mode }
-  | { kind: "taking"; attemptId: number; examTitle: string; questions: Question[]; mode: Mode };
+  | {
+      kind: "taking";
+      attemptId: number;
+      examTitle: string;
+      questions: Question[];
+      mode: Mode;
+      startedAt?: string;
+    };
 
 export default function ProvaPage() {
   const [step, setStep] = useState<Step>({ kind: "login" });
@@ -98,6 +105,7 @@ export default function ProvaPage() {
         examTitle,
         questions: data.questions,
         mode,
+        startedAt: data.startedAt,
       });
     } finally {
       setBusy(false);
@@ -247,6 +255,7 @@ export default function ProvaPage() {
             examTitle={step.examTitle}
             questions={step.questions}
             mode={step.mode}
+            startedAt={step.startedAt}
             onExit={backToList}
           />
         )}

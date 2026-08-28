@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { EXAM_TIME_LIMIT_MINUTES, EXAM_TIME_LIMIT_MS } from "@/lib/examTimer";
 
 type Option = { key: string; text: string };
 type Question = { id: number; text: string; options: Option[]; order: number };
@@ -26,6 +27,11 @@ type ExamRunnerProps = {
   examTitle: string;
   questions: Question[];
   mode: Mode;
+  // Quando a prova começou (attempts.startedAt, vindo do servidor) — usada
+  // pra calcular o prazo de 10 minutos. Se não vier, a contagem começa do
+  // momento em que essa tela monta (fallback, não devia acontecer em uso
+  // normal já que todas as rotas de início devolvem esse campo).
+  startedAt?: string;
   // Só faz sentido em modo "simulado" (praticar livremente, com login
   // pessoal) — deixa voltar pra lista de provas depois do resultado. Em modo
   // "oficial" (prova do dia / link geral / link direcionado) a sessão já se
@@ -33,19 +39,35 @@ type ExamRunnerProps = {
   onExit?: () => void;
 };
 
+function formatClock(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 // Tela de responder a prova (de marcar, uma caixinha por alternativa) +
 // resultado — usada tanto pelo login clássico (senha/código) em /prova
-// quanto pelo autocadastro por link em /prova/link/[token], então o
-// comportamento (marcar, finalizar, nota, sem editar depois) fica idêntico
-// nos dois casos.
-export function ExamRunner({ attemptId, examTitle, questions, mode, onExit }: ExamRunnerProps) {
+// quanto pelo autocadastro por link em /prova/link/[token] e pelo Simulado
+// autosserviço em /simulado, então o comportamento (marcar, finalizar, nota,
+// sem editar depois, cronômetro de 10 minutos) fica idêntico nos três casos.
+export function ExamRunner({ attemptId, examTitle, questions, mode, startedAt, onExit }: ExamRunnerProps) {
   const [step, setStep] = useState<RunnerStep>({ kind: "taking" });
   const [answersMap, setAnswersMap] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
 
-  async function submitExam() {
+  // Prazo (timestamp absoluto) calculado dentro do efeito abaixo, não durante
+  // o render — Date.now() é impuro, então só pode rodar em efeito/callback.
+  // Até o efeito rodar, remainingMs começa no valor cheio (10:00) como
+  // placeholder puro; a primeira execução do tick() já corrige isso.
+  const [remainingMs, setRemainingMs] = useState(EXAM_TIME_LIMIT_MS);
+  const autoSubmittedRef = useRef(false);
+  const submitRef = useRef<() => void>(() => {});
+
+  async function submitExam(reason?: "timeout") {
     const unanswered = questions.filter((q) => !answersMap[q.id]);
     if (
+      reason !== "timeout" &&
       unanswered.length > 0 &&
       !confirm(`Você deixou ${unanswered.length} questão(ões) em branco. Enviar mesmo assim?`)
     ) {
@@ -81,10 +103,60 @@ export function ExamRunner({ attemptId, examTitle, questions, mode, onExit }: Ex
     }
   }
 
+  // Mantém submitRef sempre apontando pro submitExam mais recente (que fecha
+  // sobre answersMap/attemptId atuais), sem precisar listar submitExam como
+  // dependência do efeito do cronômetro abaixo. Atribuição de ref só pode
+  // acontecer em efeito/callback, nunca durante o render.
+  useEffect(() => {
+    submitRef.current = () => {
+      submitExam("timeout");
+    };
+  });
+
+  // Cronômetro de 10 minutos: contagem regressiva a partir de attempts.startedAt
+  // (vindo do servidor, não do momento em que a tela montou — assim um F5 no
+  // meio da prova não reseta o prazo). Ao zerar, envia automaticamente as
+  // respostas já marcadas, mesmo com questões em branco. O prazo (que depende
+  // do relógio) só é calculado aqui dentro, nunca durante o render.
+  useEffect(() => {
+    if (step.kind !== "taking") return;
+    const deadline = (startedAt ? new Date(startedAt).getTime() : Date.now()) + EXAM_TIME_LIMIT_MS;
+    const tick = () => {
+      const left = deadline - Date.now();
+      setRemainingMs(left);
+      if (left <= 0 && !autoSubmittedRef.current) {
+        autoSubmittedRef.current = true;
+        submitRef.current();
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [step.kind, startedAt]);
+
   if (step.kind === "taking") {
+    const timeIsUp = remainingMs <= 0;
+    const lowTime = remainingMs <= 60_000;
     return (
       <div className="space-y-5">
-        <h1 className="text-lg font-semibold text-slate-900">{examTitle}</h1>
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900">{examTitle}</h1>
+            <p className="text-xs text-slate-400">Tempo máximo: {EXAM_TIME_LIMIT_MINUTES} minutos</p>
+          </div>
+          <div
+            className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold tabular-nums ${
+              timeIsUp
+                ? "bg-red-100 text-red-700"
+                : lowTime
+                  ? "animate-pulse bg-red-100 text-red-700"
+                  : "bg-slate-100 text-slate-700"
+            }`}
+            aria-live="polite"
+          >
+            {timeIsUp ? "Enviando..." : formatClock(remainingMs)}
+          </div>
+        </div>
         {questions.map((q, idx) => (
           <div key={q.id} className="rounded-xl border border-slate-200 bg-white p-5">
             <p className="text-sm font-medium text-slate-800">
@@ -135,11 +207,11 @@ export function ExamRunner({ attemptId, examTitle, questions, mode, onExit }: Ex
           </div>
         ))}
         <button
-          disabled={busy}
-          onClick={submitExam}
+          disabled={busy || timeIsUp}
+          onClick={() => submitExam()}
           className="w-full rounded-md bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
         >
-          {busy ? "Enviando..." : "Finalizar e enviar"}
+          {busy || timeIsUp ? "Enviando..." : "Finalizar e enviar"}
         </button>
       </div>
     );

@@ -19,7 +19,7 @@ type Step =
   | { kind: "loading" }
   | { kind: "invalid"; message: string }
   | { kind: "form" }
-  | { kind: "taking"; attemptId: number; examTitle: string; questions: Question[] };
+  | { kind: "taking"; attemptId: number; examTitle: string; questions: Question[]; startedAt?: string };
 
 // Autocadastro por link: sem senha, sem cadastro prévio (a não ser que a
 // prova seja direcionada a alguém específico, que já foi criado quando o
@@ -70,6 +70,7 @@ export default function ExamLinkPage({ params }: { params: Promise<{ token: stri
         attemptId: data.attemptId,
         examTitle: data.examTitle,
         questions: data.questions,
+        startedAt: data.startedAt,
       });
     } finally {
       setBusy(false);
@@ -162,6 +163,7 @@ export default function ExamLinkPage({ params }: { params: Promise<{ token: stri
             examTitle={step.examTitle}
             questions={step.questions}
             mode="oficial"
+            startedAt={step.startedAt}
           />
         )}
       </div>

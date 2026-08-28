@@ -75,5 +75,6 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     attemptId: attempt.id,
     exam: { id: currentExam.id, title: currentExam.title, passingScore: currentExam.passingScore },
     questions: examQuestions,
+    startedAt: attempt.startedAt,
   });
 }
