@@ -1,4 +1,9 @@
 import PDFDocument from "pdfkit";
+import path from "path";
+
+// Logo da Triunfo (marca quadrada) usada no cabeçalho do PDF — mesmo arquivo
+// já usado na tela de login (public/logos/triunfo_mark.png).
+const TRIUNFO_LOGO_PATH = path.join(process.cwd(), "public", "logos", "triunfo_mark.png");
 
 // Gera o PDF de uma tentativa (prova) já respondida por um colaborador —
 // pedido explícito: o cabeçalho tem que vir com Setor, Nome do Colaborador,
@@ -48,21 +53,39 @@ export async function generateAttemptPdf(data: AttemptPdfData): Promise<Buffer> 
     doc.on("end", () => resolve(Buffer.concat(chunks)));
   });
 
-  // Cabeçalho
-  doc.fontSize(16).font("Helvetica-Bold").fillColor("#0f172a").text("Triunfo Skill");
-  doc
-    .fontSize(11)
-    .font("Helvetica")
-    .fillColor("#475569")
-    .text("Comprovante de prova respondida");
-  doc.moveDown(1);
+  // Cabeçalho: logo da Triunfo à esquerda e, ao lado, qual IT/APR é essa
+  // prova — pedido explícito, pra ficar claro de cara qual documento de
+  // origem gerou o comprovante.
+  const headerTop = doc.y;
+  const logoSize = 42;
+  const textX = 50 + logoSize + 14;
+  const textWidth = 495 - logoSize - 14;
 
-  doc.fontSize(13).font("Helvetica-Bold").fillColor("#0f172a").text(data.examTitle);
+  try {
+    doc.image(TRIUNFO_LOGO_PATH, 50, headerTop, { width: logoSize, height: logoSize });
+  } catch {
+    // Se o arquivo do logo não existir nesse ambiente, segue só com o texto
+    // — não pode travar a geração do comprovante por causa da imagem.
+  }
+
+  doc
+    .fontSize(9)
+    .font("Helvetica-Bold")
+    .fillColor("#94a3b8")
+    .text("TRIUNFO LOGÍSTICA", textX, headerTop, { width: textWidth });
+  doc.fontSize(14).font("Helvetica-Bold").fillColor("#0f172a").text(data.examTitle, textX, doc.y, { width: textWidth });
   doc
     .fontSize(9)
     .font("Helvetica")
     .fillColor("#64748b")
-    .text(data.documentType === "APR" ? "APR (Análise Preliminar de Risco)" : "IT (Instrução de Trabalho)");
+    .text(
+      data.documentType === "APR" ? "APR (Análise Preliminar de Risco)" : "IT (Instrução de Trabalho)",
+      textX,
+      doc.y,
+      { width: textWidth },
+    );
+
+  doc.y = Math.max(doc.y, headerTop + logoSize);
   doc.moveDown(1);
 
   // Campos pedidos: Setor; Nome do Colaborador; Função; Data da Prova
