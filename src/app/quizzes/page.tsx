@@ -219,7 +219,7 @@ export default function QuizzesPage() {
     };
   });
 
-  // Cronômetro de 30s por pergunta — reinicia a cada troca de pergunta.
+  // Cronômetro de 90s por pergunta — reinicia a cada troca de pergunta.
   useEffect(() => {
     if (step.kind !== "quiz") return;
     const totalMs = step.secondsPerQuestion * 1000;
@@ -325,7 +325,7 @@ export default function QuizzesPage() {
                   </span>
                   <h1 className="text-2xl font-bold text-white sm:text-3xl">Quizzes</h1>
                   <p className="max-w-md text-sm text-indigo-50">
-                    5 perguntas rápidas, 30 segundos cada — pratique um IT ou APR de forma leve e
+                    5 perguntas rápidas, 90 segundos cada — pratique um IT ou APR de forma leve e
                     divertida.
                   </p>
                 </div>
@@ -389,7 +389,7 @@ export default function QuizzesPage() {
             <h1 className="text-xl font-semibold text-slate-900">Escolha o IT ou APR</h1>
             <p className="mt-1 text-sm text-slate-500">
               Contrato: <strong className="text-slate-700">{session.sectorName}</strong> — 5 perguntas
-              aleatórias, 30s cada.
+              aleatórias, 90s cada.
             </p>
 
             {examsError && <p className="mt-4 text-sm text-red-600">{examsError}</p>}
