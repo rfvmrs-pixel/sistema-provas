@@ -13,7 +13,7 @@ async function loadDocument(id: number) {
 // GET: quadrinho de segurança cadastrado pra esse documento (IT/APR) da
 // Biblioteca, se houver — usado pra pré-preencher a tela de edição no admin.
 // Fica ligado ao documento (não a uma prova de uma Função específica) porque
-// o Quiz gera as perguntas na hora direto do documento, valendo pra
+// o Simulado gera as perguntas na hora direto do documento, valendo pra
 // qualquer Função.
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const guard = await requireAdmin();
@@ -33,8 +33,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 // PUT: cria ou substitui o quadrinho do documento — 4 imagens (data URL
 // base64), qual delas é a correta (0-3) e uma explicação opcional. O gestor
 // sobe as 4 imagens quando tiver a arte de cada IT/APR — enquanto não subir,
-// o Quiz simplesmente não mostra essa etapa pra esse documento (ver
-// /api/public/quizzes/comic).
+// o Simulado simplesmente não mostra essa etapa pra esse documento (ver
+// /api/public/comic).
 export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const guard = await requireEditor();
   if (!guard.ok) return guard.response;

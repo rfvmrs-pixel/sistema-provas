@@ -172,7 +172,7 @@ export const exams = pgTable(
     // NULL = prova auto-gerada pela IA na hora, direto de um IT/APR da
     // Biblioteca, pelo autosserviço de Simulado (ver
     // /api/public/simulado/start) — não é role-scoped, vale pra qualquer
-    // Função do Contrato (mesma ideia do Quiz, mas aqui persistida como
+    // Função do Contrato (mesma ideia do Simulado autosserviço, mas aqui persistida como
     // prova de verdade porque o Simulado grava tentativa/resposta/PDF/
     // indicador). Provas criadas pelo admin em Provas > Gerar prova
     // continuam sempre com roleId preenchido.
@@ -207,15 +207,15 @@ export const questions = pgTable(
   (t) => [index("questions_exam_idx").on(t.examId)],
 );
 
-// ---------- Quadrinho de segurança (Quizzes) ----------
+// ---------- Quadrinho de segurança (Simulado) ----------
 // Desafio de "qual desenho está certo": 4 imagens (uma correta, três
 // incorretas/decoy) associadas a UM documento da Biblioteca (IT/APR) — o
 // colaborador marca qual delas retrata certo a atividade. Fica ligado ao
-// documento (não a uma prova de uma Função específica) porque o Quiz gera as
+// documento (não a uma prova de uma Função específica) porque o Simulado gera as
 // perguntas na hora direto do documento, sem depender de nenhuma prova já
 // existir. Estrutura pronta desde já; o conteúdo (as 4 imagens de cada
 // IT/APR) é cadastrado pelo gestor depois — enquanto não existir um
-// quadrinho pra um documento, a etapa simplesmente não aparece no Quiz.
+// quadrinho pra um documento, a etapa simplesmente não aparece no Simulado.
 // `images`: array de 4 data URLs (base64) na ordem A-D.
 export const documentComics = pgTable("document_comics", {
   id: serial("id").primaryKey(),

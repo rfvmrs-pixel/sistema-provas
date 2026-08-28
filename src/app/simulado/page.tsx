@@ -17,10 +17,106 @@ type SimuladoExam = {
   documentType: DocumentType;
 };
 type Question = { id: number; text: string; options: { key: string; text: string }[]; order: number };
+type ComicFeedback = { correct: boolean; correctIndex: number; explanation: string | null };
 
 type Step =
   | { kind: "form" }
-  | { kind: "taking"; attemptId: number; examTitle: string; questions: Question[]; startedAt?: string };
+  | {
+      kind: "taking";
+      attemptId: number;
+      examTitle: string;
+      documentId: number;
+      questions: Question[];
+      startedAt?: string;
+    };
+
+// Quadrinho de segurança (opcional) — só aparece na tela de resultado do
+// Simulado se o IT/APR escolhido tiver as 4 imagens cadastradas na
+// Biblioteca (manual ou por IA, ver /admin/biblioteca). Vale pra qualquer
+// Função, por isso fica ligado ao documento, não a uma prova específica —
+// ver /api/public/comic e /api/public/comic/check.
+function SafetyComic({ documentId }: { documentId: number }) {
+  const [images, setImages] = useState<string[] | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<ComicFeedback | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/public/comic?documentId=${documentId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled) setImages(d.hasComic ? d.images : null);
+      })
+      .catch(() => {
+        if (!cancelled) setImages(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [documentId]);
+
+  async function checkAnswer(index: number) {
+    if (feedback) return;
+    setSelected(index);
+    setChecking(true);
+    try {
+      const res = await fetch("/api/public/comic/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId, selectedIndex: index }),
+      });
+      const data = await res.json();
+      if (res.ok) setFeedback(data);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  if (!images || images.length !== 4) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <h2 className="text-sm font-semibold text-slate-900">Quadrinho de segurança</h2>
+      <p className="mt-1 text-xs text-slate-500">
+        Qual das 4 imagens mostra a forma correta de executar essa atividade?
+      </p>
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {images.map((src, i) => {
+          const isSelected = selected === i;
+          const isCorrectReveal = feedback && i === feedback.correctIndex;
+          const isWrongPick = feedback && isSelected && !feedback.correct;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => checkAnswer(i)}
+              disabled={checking || !!feedback}
+              className={`overflow-hidden rounded-xl border-2 transition ${
+                isCorrectReveal
+                  ? "border-emerald-500"
+                  : isWrongPick
+                    ? "border-red-500"
+                    : isSelected
+                      ? "border-indigo-400"
+                      : "border-transparent hover:border-indigo-200"
+              } disabled:cursor-default`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt={`Opção ${i + 1}`} className="aspect-square w-full object-cover" />
+            </button>
+          );
+        })}
+      </div>
+      {feedback && (
+        <p className={`mt-3 text-sm font-medium ${feedback.correct ? "text-emerald-700" : "text-red-600"}`}>
+          {feedback.correct ? "Isso mesmo! " : "Não é essa. "}
+          {feedback.explanation}
+        </p>
+      )}
+    </div>
+  );
+}
 
 // Simulado autosserviço: sem senha, sem cadastro prévio pelo gestor. O
 // próprio colaborador informa nome, matrícula, Contrato e Função e, dentro do
@@ -115,6 +211,7 @@ export default function SimuladoPage() {
         kind: "taking",
         attemptId: data.attemptId,
         examTitle: data.examTitle,
+        documentId,
         questions: data.questions,
         startedAt: data.startedAt,
       });
@@ -269,6 +366,8 @@ export default function SimuladoPage() {
             questions={step.questions}
             mode="simulado"
             startedAt={step.startedAt}
+            onExit={() => setStep({ kind: "form" })}
+            afterResult={<SafetyComic documentId={step.documentId} />}
           />
         )}
       </div>

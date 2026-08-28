@@ -51,8 +51,8 @@ export default function BibliotecaPage() {
   // Filtro por Tipo (IT/APR) — combina com o de Contrato. "" = Todos.
   const [typeFilter, setTypeFilter] = useState<"" | DocumentType>("");
 
-  // ---- Quadrinho de segurança (Quizzes) — 1 por documento, vale pra
-  // qualquer Função, já que o Quiz gera as perguntas direto da Biblioteca. ----
+  // ---- Quadrinho de segurança (Simulado) — 1 por documento, vale pra
+  // qualquer Função, já que o Simulado gera as perguntas direto da Biblioteca. ----
   const [expandedComicDocId, setExpandedComicDocId] = useState<number | null>(null);
   const [comicLoading, setComicLoading] = useState(false);
   const [comic, setComic] = useState<DocumentComic | null>(null);
@@ -556,9 +556,9 @@ export default function BibliotecaPage() {
                   <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
                     <p className="text-xs text-slate-500">
                       4 imagens sobre esse IT/APR — uma mostra a forma correta de executar a
-                      atividade, as outras três mostram formas erradas. No Quiz, o colaborador marca
+                      atividade, as outras três mostram formas erradas. No resultado do Simulado, o colaborador marca
                       qual acha que é a certa. Enquanto esse IT/APR não tiver as 4 imagens, essa
-                      etapa não aparece no Quiz. Vale pra qualquer Função (não é preciso repetir por
+                      etapa não aparece no Simulado. Vale pra qualquer Função (não é preciso repetir por
                       Função).
                     </p>
 

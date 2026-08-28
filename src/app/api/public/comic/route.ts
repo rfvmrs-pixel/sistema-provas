@@ -5,8 +5,8 @@ import { documentComics } from "@/db/schema";
 
 // GET ?documentId= -> as 4 imagens do quadrinho de segurança desse IT/APR da
 // Biblioteca, sem revelar qual é a correta (isso só sai depois de responder
-// — ver POST /api/public/quizzes/comic/check). Se o documento ainda não tem
-// quadrinho cadastrado, devolve hasComic: false — o Quiz simplesmente não
+// — ver POST /api/public/comic/check). Se o documento ainda não tem
+// quadrinho cadastrado, devolve hasComic: false — o Simulado simplesmente não
 // mostra essa etapa nesse caso.
 export async function GET(req: NextRequest) {
   const documentId = Number(req.nextUrl.searchParams.get("documentId"));

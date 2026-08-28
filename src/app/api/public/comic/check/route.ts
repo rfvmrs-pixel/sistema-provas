@@ -5,7 +5,7 @@ import { documentComics } from "@/db/schema";
 
 // POST { documentId, selectedIndex } -> confere contra o gabarito do
 // quadrinho e devolve se acertou, qual era a correta e a explicação. Assim
-// como o Quiz de perguntas, isso não grava nada no banco — é prática avulsa.
+// como as perguntas do Simulado, isso não grava nada no banco — é prática avulsa.
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const documentId = Number(body?.documentId);
