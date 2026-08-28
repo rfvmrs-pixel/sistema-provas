@@ -53,8 +53,6 @@ type ExamLink = {
   targetEmployeeId: number | null;
   targetEmployeeName: string | null;
 };
-type ExamComic = { id: number; images: string[]; correctIndex: number; explanation: string | null };
-
 const QUESTION_COUNT_OPTIONS = [10, 15];
 
 export default function ProvaDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -94,33 +92,23 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
   const [linksError, setLinksError] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
-  // ---- Quadrinho de segurança (Quizzes) ----
-  const [comic, setComic] = useState<ExamComic | null>(null);
-  const [comicImages, setComicImages] = useState<(string | null)[]>([null, null, null, null]);
-  const [comicCorrectIndex, setComicCorrectIndex] = useState(0);
-  const [comicExplanation, setComicExplanation] = useState("");
-  const [savingComic, setSavingComic] = useState(false);
-  const [comicError, setComicError] = useState<string | null>(null);
-
   async function load() {
     setLoading(true);
-    const [examRes, secRes, roleRes, empRes, docRes, linksRes, comicRes] = await Promise.all([
+    const [examRes, secRes, roleRes, empRes, docRes, linksRes] = await Promise.all([
       fetch(`/api/admin/exams/${id}`),
       fetch("/api/admin/sectors"),
       fetch("/api/admin/roles"),
       fetch("/api/admin/employees"),
       fetch("/api/admin/documents"),
       fetch(`/api/admin/exams/${id}/links`),
-      fetch(`/api/admin/exams/${id}/comic`),
     ]);
-    const [data, secData, roleData, empData, docData, linksData, comicData] = await Promise.all([
+    const [data, secData, roleData, empData, docData, linksData] = await Promise.all([
       examRes.json(),
       secRes.json(),
       roleRes.json(),
       empRes.json(),
       docRes.json(),
       linksRes.json().catch(() => ({})),
-      comicRes.json().catch(() => ({})),
     ]);
     setExamLinks(linksData.links ?? []);
     setExam(data.exam);
@@ -133,12 +121,6 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
     if (data.exam) {
       setSectorId(String(data.exam.sectorId));
       setRoleId(String(data.exam.roleId));
-    }
-    setComic(comicData.comic ?? null);
-    if (comicData.comic) {
-      setComicImages(comicData.comic.images);
-      setComicCorrectIndex(comicData.comic.correctIndex);
-      setComicExplanation(comicData.comic.explanation ?? "");
     }
     setLoading(false);
   }
@@ -282,59 +264,6 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
       setCopiedToken(token);
       setTimeout(() => setCopiedToken((t) => (t === token ? null : t)), 2000);
     });
-  }
-
-  function handleComicFile(index: number, file: File | undefined) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setComicImages((prev) => {
-        const next = [...prev];
-        next[index] = typeof reader.result === "string" ? reader.result : null;
-        return next;
-      });
-    };
-    reader.readAsDataURL(file);
-  }
-
-  async function handleSaveComic(e: React.FormEvent) {
-    e.preventDefault();
-    if (comicImages.some((img) => !img)) {
-      setComicError("Envie as 4 imagens antes de salvar.");
-      return;
-    }
-    setSavingComic(true);
-    setComicError(null);
-    try {
-      const res = await fetch(`/api/admin/exams/${id}/comic`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: comicImages, correctIndex: comicCorrectIndex, explanation: comicExplanation }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setComicError(data.error || "Falha ao salvar o quadrinho.");
-        return;
-      }
-      setComic(data.comic);
-    } finally {
-      setSavingComic(false);
-    }
-  }
-
-  async function handleRemoveComic() {
-    if (!confirm("Remover o quadrinho de segurança dessa prova?")) return;
-    setSavingComic(true);
-    setComicError(null);
-    try {
-      await fetch(`/api/admin/exams/${id}/comic`, { method: "DELETE" });
-      setComic(null);
-      setComicImages([null, null, null, null]);
-      setComicCorrectIndex(0);
-      setComicExplanation("");
-    } finally {
-      setSavingComic(false);
-    }
   }
 
   if (loading) return <p className="text-sm text-slate-400">Carregando...</p>;
@@ -645,103 +574,6 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">Quadrinho de segurança (Quizzes)</h2>
-            <p className="mt-1 max-w-2xl text-xs text-slate-500">
-              4 imagens sobre essa IT/APR — uma mostra a forma correta de executar a atividade, as
-              outras três mostram formas erradas. No Quiz, o colaborador marca qual acha que é a
-              certa. Enquanto essa prova não tiver as 4 imagens, essa etapa não aparece no Quiz.
-            </p>
-          </div>
-          <div className="shrink-0 text-center">
-            <img
-              src="/quizzes/comic-strip-exemplo.jpg"
-              alt="Exemplo de estilo de quadrinho"
-              className="h-16 w-16 rounded-md border border-slate-200 object-cover"
-            />
-            <p className="mt-1 text-[10px] text-slate-400">estilo de referência</p>
-          </div>
-        </div>
-
-        {comicError && <p className="mt-3 text-sm text-red-600">{comicError}</p>}
-
-        <form onSubmit={handleSaveComic} className="mt-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[0, 1, 2, 3].map((idx) => (
-              <label
-                key={idx}
-                className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border p-3 text-center ${
-                  comicCorrectIndex === idx ? "border-emerald-400 bg-emerald-50" : "border-slate-200"
-                }`}
-              >
-                <span className="text-xs font-medium text-slate-500">Imagem {idx + 1}</span>
-                {comicImages[idx] ? (
-                  <img src={comicImages[idx]!} alt="" className="h-20 w-20 rounded-md object-cover" />
-                ) : (
-                  <span className="flex h-20 w-20 items-center justify-center rounded-md border border-dashed border-slate-300 text-[10px] text-slate-400">
-                    sem imagem
-                  </span>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  disabled={isReadOnly}
-                  onChange={(e) => handleComicFile(idx, e.target.files?.[0])}
-                  className="hidden"
-                />
-                <span className="flex items-center gap-1 text-[11px] text-slate-600">
-                  <input
-                    type="radio"
-                    name="comicCorrect"
-                    checked={comicCorrectIndex === idx}
-                    onChange={() => setComicCorrectIndex(idx)}
-                    disabled={isReadOnly}
-                  />
-                  correta
-                </span>
-              </label>
-            ))}
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-700">
-              Explicação (aparece depois de responder)
-            </label>
-            <textarea
-              value={comicExplanation}
-              onChange={(e) => setComicExplanation(e.target.value)}
-              disabled={isReadOnly}
-              rows={2}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              placeholder="Por que essa é a forma correta de executar a atividade..."
-            />
-          </div>
-
-          {!isReadOnly && (
-            <div className="flex gap-2">
-              <button
-                disabled={savingComic}
-                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-              >
-                {savingComic ? "Salvando..." : comic ? "Atualizar quadrinho" : "Salvar quadrinho"}
-              </button>
-              {comic && (
-                <button
-                  type="button"
-                  onClick={handleRemoveComic}
-                  disabled={savingComic}
-                  className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                >
-                  Remover
-                </button>
-              )}
-            </div>
-          )}
-        </form>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">

@@ -21,7 +21,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ token: string 
 
   const [sector, role] = await Promise.all([
     db.query.sectors.findFirst({ where: eq(sectors.id, exam.sectorId) }),
-    db.query.roles.findFirst({ where: eq(roles.id, exam.roleId) }),
+    exam.roleId ? db.query.roles.findFirst({ where: eq(roles.id, exam.roleId) }) : Promise.resolve(undefined),
   ]);
 
   return NextResponse.json({

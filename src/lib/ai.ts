@@ -152,3 +152,103 @@ export async function generateExamFromText(
 
   return parsed;
 }
+
+// ---------- Quadrinho de segurança (cenário para geração de imagem) ----------
+// A IA de texto (Claude, já integrada acima) só decide O QUE cada uma das 4
+// imagens deve retratar — a geração da imagem em si usa um provedor
+// separado (ver src/lib/imageAi.ts, OpenAI gpt-image-1), porque o Claude não
+// gera imagem. Esse desenho em duas etapas garante que as 4 descrições
+// sigam o mesmo cenário-base (só uma variação correta entre elas) antes de
+// virar imagem.
+const COMIC_TOOL_NAME = "salvar_quadrinho";
+
+export type ComicOption = {
+  description: string;
+  isCorrect: boolean;
+};
+
+export type GeneratedComic = {
+  scenarioPrompt: string;
+  options: ComicOption[];
+  explanation: string;
+};
+
+export async function generateComicScenario(
+  sourceText: string,
+  opts: { documentType?: DocumentType; sourceFileName?: string } = {},
+): Promise<GeneratedComic> {
+  const documentType: DocumentType = opts.documentType === "APR" ? "APR" : "IT";
+  const client = getClient();
+
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 2000,
+    system:
+      `Você é um especialista em segurança do trabalho criando um "quadrinho de segurança" pra treinamento: um cenário único do dia a dia, mostrado em 4 desenhos estilo cartoon, onde SÓ UM retrata a forma correta de agir (segundo o documento) e os outros 3 mostram erros plausíveis (riscos reais que colaboradores cometem). ${DOCUMENT_TYPE_GUIDANCE[documentType]} As 4 descrições precisam ser da MESMA cena/atividade (mesmo local, mesma ação geral), variando só o comportamento/detalhe que muda entre certo e errado — pra não dar pra adivinhar a resposta só pela composição da imagem. Escreva cada descrição em português, de forma visual e objetiva (pra alimentar um gerador de imagens), sem mencionar texto ou letras na cena.`,
+    messages: [
+      {
+        role: "user",
+        content: `Com base no conteúdo abaixo (de um PDF do tipo ${documentType}${
+          opts.sourceFileName ? ` chamado "${opts.sourceFileName}"` : ""
+        }), crie um cenário de quadrinho de segurança: um resumo curto da cena comum às 4 imagens, e as 4 variações (só 1 correta).\n\nConteúdo:\n"""\n${sourceText}\n"""`,
+      },
+    ],
+    tools: [
+      {
+        name: COMIC_TOOL_NAME,
+        description: "Salva o cenário do quadrinho de segurança com as 4 variações.",
+        input_schema: {
+          type: "object",
+          properties: {
+            scenarioPrompt: {
+              type: "string",
+              description:
+                "Descrição curta (1-2 frases) da cena/atividade em comum entre as 4 imagens (local, contexto, quem aparece), sem revelar qual variação é a correta.",
+            },
+            options: {
+              type: "array",
+              minItems: 4,
+              maxItems: 4,
+              items: {
+                type: "object",
+                properties: {
+                  description: {
+                    type: "string",
+                    description:
+                      "Descrição visual detalhada dessa variação específica da cena, pronta pra virar prompt de imagem (o que a pessoa está fazendo, EPIs, posição, etc.).",
+                  },
+                  isCorrect: {
+                    type: "boolean",
+                    description: "true só pra UMA das 4 variações — a que retrata a forma correta de agir.",
+                  },
+                },
+                required: ["description", "isCorrect"],
+              },
+            },
+            explanation: {
+              type: "string",
+              description: "Breve explicação (1-2 frases) de por que a variação correta está certa.",
+            },
+          },
+          required: ["scenarioPrompt", "options", "explanation"],
+        },
+      },
+    ],
+    tool_choice: { type: "tool", name: COMIC_TOOL_NAME },
+  });
+
+  const toolUse = message.content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === COMIC_TOOL_NAME,
+  );
+  if (!toolUse) {
+    throw new Error("A IA não retornou o cenário do quadrinho no formato esperado. Tente novamente.");
+  }
+
+  const parsed = toolUse.input as GeneratedComic;
+  const correctCount = parsed.options?.filter((o) => o.isCorrect).length ?? 0;
+  if (!parsed.options || parsed.options.length !== 4 || correctCount !== 1) {
+    throw new Error("A IA não gerou as 4 variações do quadrinho corretamente. Tente novamente.");
+  }
+
+  return parsed;
+}

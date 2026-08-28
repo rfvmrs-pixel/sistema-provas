@@ -15,6 +15,7 @@ type Document = {
   sectorName: string;
   examCount: number;
 };
+type DocumentComic = { id: number; images: string[]; correctIndex: number; explanation: string | null };
 
 function formatSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -49,6 +50,121 @@ export default function BibliotecaPage() {
   const [contractFilter, setContractFilter] = useState("");
   // Filtro por Tipo (IT/APR) — combina com o de Contrato. "" = Todos.
   const [typeFilter, setTypeFilter] = useState<"" | DocumentType>("");
+
+  // ---- Quadrinho de segurança (Simulado) — 1 por documento, vale pra
+  // qualquer Função, já que o Simulado gera as perguntas direto da Biblioteca. ----
+  const [expandedComicDocId, setExpandedComicDocId] = useState<number | null>(null);
+  const [comicLoading, setComicLoading] = useState(false);
+  const [comic, setComic] = useState<DocumentComic | null>(null);
+  const [comicImages, setComicImages] = useState<(string | null)[]>([null, null, null, null]);
+  const [comicCorrectIndex, setComicCorrectIndex] = useState(0);
+  const [comicExplanation, setComicExplanation] = useState("");
+  const [savingComic, setSavingComic] = useState(false);
+  const [comicError, setComicError] = useState<string | null>(null);
+  const [generatingComic, setGeneratingComic] = useState(false);
+
+  async function toggleComicPanel(docId: number) {
+    if (expandedComicDocId === docId) {
+      setExpandedComicDocId(null);
+      return;
+    }
+    setExpandedComicDocId(docId);
+    setComic(null);
+    setComicImages([null, null, null, null]);
+    setComicCorrectIndex(0);
+    setComicExplanation("");
+    setComicError(null);
+    setComicLoading(true);
+    try {
+      const res = await fetch(`/api/admin/documents/${docId}/comic`);
+      const data = await res.json();
+      if (data.comic) {
+        setComic(data.comic);
+        setComicImages(data.comic.images);
+        setComicCorrectIndex(data.comic.correctIndex);
+        setComicExplanation(data.comic.explanation ?? "");
+      }
+    } finally {
+      setComicLoading(false);
+    }
+  }
+
+  function handleComicFile(index: number, file: File | undefined) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setComicImages((prev) => {
+        const next = [...prev];
+        next[index] = typeof reader.result === "string" ? reader.result : null;
+        return next;
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleSaveComic(e: React.FormEvent, docId: number) {
+    e.preventDefault();
+    if (comicImages.some((img) => !img)) {
+      setComicError("Envie as 4 imagens antes de salvar.");
+      return;
+    }
+    setSavingComic(true);
+    setComicError(null);
+    try {
+      const res = await fetch(`/api/admin/documents/${docId}/comic`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: comicImages, correctIndex: comicCorrectIndex, explanation: comicExplanation }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setComicError(data.error || "Falha ao salvar o quadrinho.");
+        return;
+      }
+      setComic(data.comic);
+    } finally {
+      setSavingComic(false);
+    }
+  }
+
+  // Gera as 4 imagens por IA (Claude decide o cenário, OpenAI gera cada
+  // imagem — ver /api/admin/documents/[id]/comic/generate) e só preenche o
+  // formulário com o resultado; não salva sozinho — o admin revisa e clica
+  // em "Salvar quadrinho" (handleSaveComic) igual a um upload manual.
+  async function handleGenerateComic(docId: number) {
+    setGeneratingComic(true);
+    setComicError(null);
+    try {
+      const res = await fetch(`/api/admin/documents/${docId}/comic/generate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setComicError(data.error || "Falha ao gerar o quadrinho por IA.");
+        return;
+      }
+      setComicImages(data.images);
+      setComicCorrectIndex(data.correctIndex);
+      setComicExplanation(data.explanation ?? "");
+    } catch {
+      setComicError("Erro de conexão ao gerar o quadrinho por IA.");
+    } finally {
+      setGeneratingComic(false);
+    }
+  }
+
+  async function handleRemoveComic(docId: number) {
+    if (!confirm("Remover o quadrinho de segurança desse IT/APR?")) return;
+    setSavingComic(true);
+    setComicError(null);
+    try {
+      await fetch(`/api/admin/documents/${docId}/comic`, { method: "DELETE" });
+      setComic(null);
+      setComicImages([null, null, null, null]);
+      setComicCorrectIndex(0);
+      setComicExplanation("");
+    } finally {
+      setSavingComic(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -390,40 +506,169 @@ export default function BibliotecaPage() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {filteredDocuments.map((doc) => (
-              <li key={doc.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                        doc.documentType === "APR"
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-sky-100 text-sky-700"
-                      }`}
-                    >
-                      {doc.documentType}
-                    </span>
-                    <a
-                      href={`/api/admin/documents/${doc.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block truncate font-medium text-slate-800 hover:underline"
-                      title={doc.fileName}
-                    >
-                      {doc.fileName}
-                    </a>
+              <li key={doc.id} className="px-5 py-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                          doc.documentType === "APR"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-sky-100 text-sky-700"
+                        }`}
+                      >
+                        {doc.documentType}
+                      </span>
+                      <a
+                        href={`/api/admin/documents/${doc.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block truncate font-medium text-slate-800 hover:underline"
+                        title={doc.fileName}
+                      >
+                        {doc.fileName}
+                      </a>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {doc.sectorName} · {formatSize(doc.fileSize)} · {doc.examCount}{" "}
+                      {doc.examCount === 1 ? "prova gerada" : "provas geradas"}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-400">
-                    {doc.sectorName} · {formatSize(doc.fileSize)} · {doc.examCount}{" "}
-                    {doc.examCount === 1 ? "prova gerada" : "provas geradas"}
-                  </p>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <button
+                      onClick={() => toggleComicPanel(doc.id)}
+                      className="text-xs font-medium text-indigo-600 hover:underline"
+                    >
+                      {expandedComicDocId === doc.id ? "fechar quadrinho" : "quadrinho de segurança"}
+                    </button>
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => handleDeleteDocument(doc)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        excluir
+                      </button>
+                    )}
+                  </div>
                 </div>
-                {!isReadOnly && (
-                  <button
-                    onClick={() => handleDeleteDocument(doc)}
-                    className="shrink-0 text-xs text-red-600 hover:underline"
-                  >
-                    excluir
-                  </button>
+
+                {expandedComicDocId === doc.id && (
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs text-slate-500">
+                      4 imagens sobre esse IT/APR — uma mostra a forma correta de executar a
+                      atividade, as outras três mostram formas erradas. No resultado do Simulado, o colaborador marca
+                      qual acha que é a certa. Enquanto esse IT/APR não tiver as 4 imagens, essa
+                      etapa não aparece no Simulado. Vale pra qualquer Função (não é preciso repetir por
+                      Função).
+                    </p>
+
+                    {!isReadOnly && !comicLoading && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateComic(doc.id)}
+                          disabled={generatingComic || savingComic}
+                          className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                        >
+                          {generatingComic ? "Gerando as 4 imagens..." : "Gerar por IA"}
+                        </button>
+                        <span className="text-[11px] text-slate-400">
+                          Preenche as 4 imagens abaixo pra você revisar — só grava ao clicar em
+                          &quot;Salvar quadrinho&quot;.
+                        </span>
+                      </div>
+                    )}
+
+                    {comicLoading ? (
+                      <p className="mt-3 text-xs text-slate-400">Carregando...</p>
+                    ) : (
+                      <>
+                        {comicError && <p className="mt-3 text-sm text-red-600">{comicError}</p>}
+                        <form
+                          onSubmit={(e) => handleSaveComic(e, doc.id)}
+                          className="mt-3 space-y-4"
+                        >
+                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {[0, 1, 2, 3].map((idx) => (
+                              <label
+                                key={idx}
+                                className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border bg-white p-3 text-center ${
+                                  comicCorrectIndex === idx
+                                    ? "border-emerald-400 bg-emerald-50"
+                                    : "border-slate-200"
+                                }`}
+                              >
+                                <span className="text-xs font-medium text-slate-500">Imagem {idx + 1}</span>
+                                {comicImages[idx] ? (
+                                  <img
+                                    src={comicImages[idx]!}
+                                    alt=""
+                                    className="h-20 w-20 rounded-md object-cover"
+                                  />
+                                ) : (
+                                  <span className="flex h-20 w-20 items-center justify-center rounded-md border border-dashed border-slate-300 text-[10px] text-slate-400">
+                                    sem imagem
+                                  </span>
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  disabled={isReadOnly}
+                                  onChange={(e) => handleComicFile(idx, e.target.files?.[0])}
+                                  className="hidden"
+                                />
+                                <span className="flex items-center gap-1 text-[11px] text-slate-600">
+                                  <input
+                                    type="radio"
+                                    name="comicCorrect"
+                                    checked={comicCorrectIndex === idx}
+                                    onChange={() => setComicCorrectIndex(idx)}
+                                    disabled={isReadOnly}
+                                  />
+                                  correta
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700">
+                              Explicação (aparece depois de responder)
+                            </label>
+                            <textarea
+                              value={comicExplanation}
+                              onChange={(e) => setComicExplanation(e.target.value)}
+                              disabled={isReadOnly}
+                              rows={2}
+                              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                              placeholder="Por que essa é a forma correta de executar a atividade..."
+                            />
+                          </div>
+
+                          {!isReadOnly && (
+                            <div className="flex gap-2">
+                              <button
+                                disabled={savingComic}
+                                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                              >
+                                {savingComic ? "Salvando..." : comic ? "Atualizar quadrinho" : "Salvar quadrinho"}
+                              </button>
+                              {comic && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveComic(doc.id)}
+                                  disabled={savingComic}
+                                  className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  Remover
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </form>
+                      </>
+                    )}
+                  </div>
                 )}
               </li>
             ))}

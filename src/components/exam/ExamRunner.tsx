@@ -37,6 +37,11 @@ type ExamRunnerProps = {
   // "oficial" (prova do dia / link geral / link direcionado) a sessão já se
   // encerra sozinha ao finalizar, então não tem "lista" pra voltar.
   onExit?: () => void;
+  // Conteúdo extra mostrado depois da revisão, só na tela de resultado — usado
+  // pelo Simulado autosserviço pra encaixar o quadrinho de segurança (ver
+  // /simulado). ExamRunner não sabe nada sobre quadrinho — só reserva o
+  // espaço; quem monta o conteúdo é a página que usa esse componente.
+  afterResult?: React.ReactNode;
 };
 
 function formatClock(ms: number): string {
@@ -51,7 +56,7 @@ function formatClock(ms: number): string {
 // quanto pelo autocadastro por link em /prova/link/[token] e pelo Simulado
 // autosserviço em /simulado, então o comportamento (marcar, finalizar, nota,
 // sem editar depois, cronômetro de 10 minutos) fica idêntico nos três casos.
-export function ExamRunner({ attemptId, examTitle, questions, mode, startedAt, onExit }: ExamRunnerProps) {
+export function ExamRunner({ attemptId, examTitle, questions, mode, startedAt, onExit, afterResult }: ExamRunnerProps) {
   const [step, setStep] = useState<RunnerStep>({ kind: "taking" });
   const [answersMap, setAnswersMap] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState(false);
@@ -281,6 +286,8 @@ export function ExamRunner({ attemptId, examTitle, questions, mode, startedAt, o
           ))}
         </ol>
       </div>
+
+      {afterResult}
     </div>
   );
 }

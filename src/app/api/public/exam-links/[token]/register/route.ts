@@ -25,6 +25,11 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ token:
   if (!exam || !exam.active) {
     return NextResponse.json({ error: "Essa prova não está mais disponível." }, { status: 400 });
   }
+  if (!exam.roleId) {
+    // Não deveria acontecer (links só são criados pra provas com Função —
+    // ver /api/admin/exams/[id]/links), mas fica como guarda de segurança.
+    return NextResponse.json({ error: "Essa prova não tem Função definida." }, { status: 400 });
+  }
 
   const body = await request.json().catch(() => null);
   const name = body?.name?.toString().trim();

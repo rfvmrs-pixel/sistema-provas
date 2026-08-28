@@ -163,14 +163,20 @@ export const exams = pgTable(
     // De qual documento da biblioteca essa prova foi gerada (se veio de lá).
     // set null: apagar o PDF da biblioteca não apaga as provas já geradas.
     documentId: integer("document_id").references(() => documents.id, { onDelete: "set null" }),
-    // Cada prova pertence a exatamente 1 Setor + 1 Função. Funcionário só vê
-    // provas do seu próprio Setor E Função (ver /api/employee/exams).
+    // Cada prova pertence a exatamente 1 Setor. Funcionário só vê provas do
+    // seu próprio Setor E Função (ver /api/employee/exams) — exceto as
+    // provas auto-geradas pelo Simulado (ver abaixo), que não têm Função.
     sectorId: integer("sector_id")
       .notNull()
       .references(() => sectors.id, { onDelete: "restrict" }),
-    roleId: integer("role_id")
-      .notNull()
-      .references(() => roles.id, { onDelete: "restrict" }),
+    // NULL = prova auto-gerada pela IA na hora, direto de um IT/APR da
+    // Biblioteca, pelo autosserviço de Simulado (ver
+    // /api/public/simulado/start) — não é role-scoped, vale pra qualquer
+    // Função do Contrato (mesma ideia do Simulado autosserviço, mas aqui persistida como
+    // prova de verdade porque o Simulado grava tentativa/resposta/PDF/
+    // indicador). Provas criadas pelo admin em Provas > Gerar prova
+    // continuam sempre com roleId preenchido.
+    roleId: integer("role_id").references(() => roles.id, { onDelete: "restrict" }),
     // Incrementa toda vez que as questões são regeneradas (manual pelo admin,
     // ou automático depois de 3 tentativas "oficial" do mesmo colaborador —
     // ver src/lib/attemptLimit.ts). attempts.questionSetVersion guarda com
@@ -201,19 +207,22 @@ export const questions = pgTable(
   (t) => [index("questions_exam_idx").on(t.examId)],
 );
 
-// ---------- Quadrinho de segurança (Quizzes) ----------
+// ---------- Quadrinho de segurança (Simulado) ----------
 // Desafio de "qual desenho está certo": 4 imagens (uma correta, três
-// incorretas/decoy) associadas a UMA prova (IT/APR) — o colaborador marca
-// qual delas retrata certo a atividade. Estrutura pronta desde já; o
-// conteúdo (as 4 imagens de cada IT/APR) é cadastrado pelo gestor depois —
-// enquanto não existir um quadrinho pra uma prova, a etapa simplesmente não
-// aparece no Quiz. `images`: array de 4 data URLs (base64) na ordem A-D.
-export const examComics = pgTable("exam_comics", {
+// incorretas/decoy) associadas a UM documento da Biblioteca (IT/APR) — o
+// colaborador marca qual delas retrata certo a atividade. Fica ligado ao
+// documento (não a uma prova de uma Função específica) porque o Simulado gera as
+// perguntas na hora direto do documento, sem depender de nenhuma prova já
+// existir. Estrutura pronta desde já; o conteúdo (as 4 imagens de cada
+// IT/APR) é cadastrado pelo gestor depois — enquanto não existir um
+// quadrinho pra um documento, a etapa simplesmente não aparece no Simulado.
+// `images`: array de 4 data URLs (base64) na ordem A-D.
+export const documentComics = pgTable("document_comics", {
   id: serial("id").primaryKey(),
-  examId: integer("exam_id")
+  documentId: integer("document_id")
     .notNull()
     .unique()
-    .references(() => exams.id, { onDelete: "cascade" }),
+    .references(() => documents.id, { onDelete: "cascade" }),
   images: jsonb("images").notNull(),
   correctIndex: integer("correct_index").notNull(),
   explanation: text("explanation"),
@@ -341,6 +350,7 @@ export const sectorsRelations = relations(sectors, ({ many }) => ({
 export const documentsRelations = relations(documents, ({ one, many }) => ({
   sector: one(sectors, { fields: [documents.sectorId], references: [sectors.id] }),
   exams: many(exams),
+  comic: one(documentComics, { fields: [documents.id], references: [documentComics.documentId] }),
 }));
 
 export const adminsRelations = relations(admins, ({ one, many }) => ({
@@ -372,11 +382,10 @@ export const examsRelations = relations(exams, ({ one, many }) => ({
   sector: one(sectors, { fields: [exams.sectorId], references: [sectors.id] }),
   role: one(roles, { fields: [exams.roleId], references: [roles.id] }),
   document: one(documents, { fields: [exams.documentId], references: [documents.id] }),
-  comic: one(examComics, { fields: [exams.id], references: [examComics.examId] }),
 }));
 
-export const examComicsRelations = relations(examComics, ({ one }) => ({
-  exam: one(exams, { fields: [examComics.examId], references: [exams.id] }),
+export const documentComicsRelations = relations(documentComics, ({ one }) => ({
+  document: one(documents, { fields: [documentComics.documentId], references: [documents.id] }),
 }));
 
 export const examLinksRelations = relations(examLinks, ({ one, many }) => ({
