@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ExamRunner } from "@/components/exam/ExamRunner";
 
 type Sector = { id: number; name: string };
@@ -121,11 +122,21 @@ export default function ProvaPage() {
     <div className="flex flex-1 justify-center bg-slate-50 px-6 py-10">
       <div className="w-full max-w-2xl">
         {step.kind === "login" && (
-          <form
-            onSubmit={handleLogin}
-            className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm"
-          >
-            <h1 className="text-lg font-semibold text-slate-900">Fazer prova</h1>
+          <div className="space-y-5">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+              </svg>
+              Voltar ao menu
+            </Link>
+            <form
+              onSubmit={handleLogin}
+              className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm"
+            >
+              <h1 className="text-lg font-semibold text-slate-900">Fazer prova</h1>
             <p className="mt-1 text-sm text-slate-500">Informe seus dados para começar.</p>
 
             <div className="mt-6 space-y-4">
@@ -200,7 +211,8 @@ export default function ProvaPage() {
             >
               {busy ? "Entrando..." : "Entrar"}
             </button>
-          </form>
+            </form>
+          </div>
         )}
 
         {step.kind === "list" && (

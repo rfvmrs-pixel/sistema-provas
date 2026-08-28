@@ -135,6 +135,15 @@ export default function SimuladoPage() {
       <div className="w-full max-w-2xl">
         {step.kind === "form" && (
           <div className="space-y-5">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+              </svg>
+              Voltar ao menu
+            </Link>
             <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
               <h1 className="text-lg font-semibold text-slate-900">Fazer um Simulado</h1>
               <p className="mt-1 text-sm text-slate-500">
