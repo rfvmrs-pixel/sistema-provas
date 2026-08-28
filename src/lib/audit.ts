@@ -13,7 +13,7 @@ export type AuditPendingExam = {
   examId: number;
   examTitle: string;
   documentType: string;
-  roleId: number;
+  roleId: number | null;
   roleName: string;
   totalApplicable: number;
   completedCount: number;

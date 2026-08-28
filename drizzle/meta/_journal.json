@@ -71,6 +71,20 @@
       "when": 1787918434263,
       "tag": "0009_add_exam_comics",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787925000000,
+      "tag": "0010_repurpose_comics_to_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787941417729,
+      "tag": "0011_exams_role_id_nullable",
+      "breakpoints": true
     }
   ]
 }

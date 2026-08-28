@@ -5,13 +5,13 @@ import Image from "next/image";
 import Link from "next/link";
 
 type Sector = { id: number; name: string };
+// Cada item aqui é um IT/APR da Biblioteca (não uma prova pré-cadastrada) —
+// o Quiz gera as 5 perguntas na hora, via IA, direto do PDF, então todo
+// IT/APR do Contrato aparece aqui, para qualquer Função.
 type QuizExam = {
   id: number;
   title: string;
-  summary: string | null;
   documentType: string;
-  roleName: string;
-  questionCount: number;
 };
 type QuizOption = { key: string; text: string };
 type QuizQuestion = { id: number; text: string; options: QuizOption[] };
@@ -38,8 +38,8 @@ type QuizSession = { name: string; matricula: string; sectorId: number; sectorNa
 type Step =
   | { kind: "form" }
   | { kind: "pick" }
-  | { kind: "quiz"; examId: number; token: string; examTitle: string; documentType: string; questions: QuizQuestion[]; secondsPerQuestion: number }
-  | { kind: "result"; examId: number; examTitle: string; data: GradeResult };
+  | { kind: "quiz"; documentId: number; token: string; examTitle: string; documentType: string; questions: QuizQuestion[]; secondsPerQuestion: number }
+  | { kind: "result"; documentId: number; examTitle: string; data: GradeResult };
 
 function DocBadge({ documentType }: { documentType: string }) {
   const isApr = documentType === "APR";
@@ -165,7 +165,7 @@ export default function QuizzesPage() {
       const res = await fetch("/api/public/quizzes/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sectorId: session.sectorId, examId: exam.id }),
+        body: JSON.stringify({ sectorId: session.sectorId, documentId: exam.id }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -174,7 +174,7 @@ export default function QuizzesPage() {
       }
       setStep({
         kind: "quiz",
-        examId: data.examId,
+        documentId: data.documentId,
         token: data.token,
         examTitle: data.examTitle,
         documentType: data.documentType,
@@ -208,7 +208,7 @@ export default function QuizzesPage() {
         body: JSON.stringify({ token: step.token, answers: finalAnswers }),
       });
       const data: GradeResult = await res.json();
-      setStep({ kind: "result", examId: step.examId, examTitle: step.examTitle, data });
+      setStep({ kind: "result", documentId: step.documentId, examTitle: step.examTitle, data });
     } catch {
       // volta pro quiz se der erro de conexão; usuário pode tentar de novo
       setGrading(false);
@@ -282,7 +282,7 @@ export default function QuizzesPage() {
     async function loadComic() {
       if (step.kind !== "result") return;
       try {
-        const res = await fetch(`/api/public/quizzes/comic?examId=${step.examId}`);
+        const res = await fetch(`/api/public/quizzes/comic?documentId=${step.documentId}`);
         const data = await res.json();
         if (!cancelled) setComicImages(data.hasComic ? data.images : null);
       } catch {
@@ -294,7 +294,7 @@ export default function QuizzesPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step.kind, step.kind === "result" ? step.examId : null]);
+  }, [step.kind, step.kind === "result" ? step.documentId : null]);
 
   async function checkComicAnswer(index: number) {
     if (step.kind !== "result" || comicFeedback) return;
@@ -304,7 +304,7 @@ export default function QuizzesPage() {
       const res = await fetch("/api/public/quizzes/comic/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ examId: step.examId, selectedIndex: index }),
+        body: JSON.stringify({ documentId: step.documentId, selectedIndex: index }),
       });
       const data = await res.json();
       if (res.ok) setComicFeedback(data);
@@ -442,7 +442,7 @@ export default function QuizzesPage() {
                 <p className="text-sm text-slate-400">Carregando...</p>
               ) : exams.length === 0 ? (
                 <p className="text-sm text-slate-400">
-                  Nenhum IT/APR com perguntas disponível para esse Contrato ainda.
+                  Nenhum IT/APR cadastrado na Biblioteca para esse Contrato ainda.
                 </p>
               ) : filteredExams.length === 0 ? (
                 <p className="text-sm text-slate-400">
@@ -459,12 +459,10 @@ export default function QuizzesPage() {
                   >
                     <div className="flex w-full items-center justify-between gap-2">
                       <DocBadge documentType={exam.documentType} />
-                      <span className="text-xs text-slate-400">{exam.roleName}</span>
                     </div>
                     <p className="text-sm font-semibold text-slate-900">{exam.title}</p>
-                    {exam.summary && <p className="line-clamp-2 text-xs text-slate-500">{exam.summary}</p>}
                     <span className="mt-1 text-xs font-medium text-indigo-600 group-hover:text-indigo-700">
-                      {starting === exam.id ? "Preparando..." : "Começar quiz →"}
+                      {starting === exam.id ? "Gerando perguntas..." : "Começar quiz →"}
                     </span>
                   </button>
                 ))

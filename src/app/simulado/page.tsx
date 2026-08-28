@@ -8,13 +8,13 @@ import { EXAM_TIME_LIMIT_MINUTES } from "@/lib/examTimer";
 type Sector = { id: number; name: string };
 type Role = { id: number; name: string };
 type DocumentType = "IT" | "APR";
+// Cada item aqui é um IT/APR da Biblioteca (não uma prova pré-cadastrada) —
+// o Simulado gera as 10 perguntas na hora, via IA, direto do PDF, então todo
+// IT/APR do Contrato aparece aqui, para qualquer Função.
 type SimuladoExam = {
   id: number;
   title: string;
-  summary: string | null;
-  passingScore: number;
   documentType: DocumentType;
-  questionCount: number;
 };
 type Question = { id: number; text: string; options: { key: string; text: string }[]; order: number };
 
@@ -53,51 +53,47 @@ export default function SimuladoPage() {
       .then((d) => setSectors(d.sectors ?? []));
   }, []);
 
-  // Contrato mudou -> recarrega as Funções que têm prova disponível nesse
-  // Contrato. Zerar Função/lista de provas já escolhidas acontece no próprio
-  // handler de troca (handleSectorChange), não aqui — o efeito só busca dado.
+  // Função é só um dado do cadastro do colaborador — não depende do
+  // Contrato nem filtra quais IT/APR aparecem (o Simulado gera a prova na
+  // hora, via IA, vale pra qualquer Função). Por isso a lista de Funções é
+  // carregada uma vez só, junto com os Contratos.
   useEffect(() => {
-    if (!sectorId) return;
     setLoadingRoles(true);
-    fetch(`/api/public/roles?sectorId=${sectorId}`)
+    fetch("/api/public/roles")
       .then((r) => r.json())
       .then((d) => setRoles(d.roles ?? []))
       .finally(() => setLoadingRoles(false));
-  }, [sectorId]);
+  }, []);
 
-  // Função mudou -> recarrega as provas (IT/APR) disponíveis pra esse
-  // Contrato+Função.
+  // Contrato mudou -> recarrega os IT/APR da Biblioteca desse Contrato.
   useEffect(() => {
-    if (!sectorId || !roleId) return;
+    if (!sectorId) return;
     setLoadingExams(true);
-    fetch(`/api/public/simulado/exams?sectorId=${sectorId}&roleId=${roleId}`)
+    fetch(`/api/public/simulado/exams?sectorId=${sectorId}`)
       .then((r) => r.json())
       .then((d) => setExams(d.exams ?? []))
       .finally(() => setLoadingExams(false));
-  }, [sectorId, roleId]);
+  }, [sectorId]);
 
   function handleSectorChange(value: string) {
     setSectorId(value);
-    setRoleId("");
-    setRoles([]);
     setExams([]);
   }
 
   function handleRoleChange(value: string) {
     setRoleId(value);
-    setExams([]);
   }
 
   const canChooseExam = name.trim().length > 0 && matricula.trim().length > 0 && !!sectorId && !!roleId;
 
-  async function startSimulado(examId: number) {
+  async function startSimulado(documentId: number) {
     setError(null);
     if (!name.trim() || !matricula.trim()) {
       setError("Preencha seu nome e matrícula antes de escolher a prova.");
       return;
     }
     setBusy(true);
-    setStartingExamId(examId);
+    setStartingExamId(documentId);
     try {
       const res = await fetch("/api/public/simulado/start", {
         method: "POST",
@@ -107,7 +103,7 @@ export default function SimuladoPage() {
           matricula: matricula.trim(),
           sectorId: Number(sectorId),
           roleId: Number(roleId),
-          examId,
+          documentId,
         }),
       });
       const data = await res.json();
@@ -198,19 +194,11 @@ export default function SimuladoPage() {
                   <select
                     value={roleId}
                     onChange={(e) => handleRoleChange(e.target.value)}
-                    disabled={!sectorId || loadingRoles}
+                    disabled={loadingRoles}
                     className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
                     required
                   >
-                    <option value="">
-                      {!sectorId
-                        ? "Escolha o Contrato primeiro..."
-                        : loadingRoles
-                          ? "Carregando..."
-                          : roles.length === 0
-                            ? "Nenhuma prova disponível nesse Contrato"
-                            : "Selecione..."}
-                    </option>
+                    <option value="">{loadingRoles ? "Carregando..." : "Selecione..."}</option>
                     {roles.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name}
@@ -224,15 +212,13 @@ export default function SimuladoPage() {
             {sectorId && roleId && (
               <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="text-sm font-semibold text-slate-900">Escolha o IT ou APR do simulado</h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Provas disponíveis para esse Contrato e Função:
-                </p>
+                <p className="mt-1 text-xs text-slate-500">IT/APR disponíveis para esse Contrato:</p>
 
                 <div className="mt-4 space-y-3">
-                  {loadingExams && <p className="text-sm text-slate-400">Carregando provas...</p>}
+                  {loadingExams && <p className="text-sm text-slate-400">Carregando...</p>}
                   {!loadingExams && exams.length === 0 && (
                     <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
-                      Nenhum IT/APR disponível para esse Contrato/Função no momento.
+                      Nenhum IT/APR cadastrado na Biblioteca para esse Contrato ainda.
                     </p>
                   )}
                   {exams.map((ex) => (
@@ -256,11 +242,10 @@ export default function SimuladoPage() {
                             {ex.documentType}
                           </span>
                         </h3>
-                        {ex.summary && <p className="mt-1 text-xs text-slate-500">{ex.summary}</p>}
-                        <p className="mt-1 text-xs text-slate-400">{ex.questionCount} questões</p>
+                        <p className="mt-1 text-xs text-slate-400">10 perguntas geradas na hora</p>
                       </div>
                       <span className="shrink-0 rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white">
-                        {startingExamId === ex.id ? "Entrando..." : "Começar"}
+                        {startingExamId === ex.id ? "Gerando..." : "Começar"}
                       </span>
                     </button>
                   ))}

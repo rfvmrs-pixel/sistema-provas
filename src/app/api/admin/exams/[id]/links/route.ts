@@ -61,6 +61,15 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   if (!exam.active) {
     return NextResponse.json({ error: "Essa prova está desativada." }, { status: 400 });
   }
+  if (!exam.roleId) {
+    // Prova sem Função — auto-gerada pelo Simulado autosserviço (ver
+    // /api/public/simulado/start), não faz sentido gerar link de aplicação
+    // pra ela (link de aplicação sempre assume Setor+Função fixos).
+    return NextResponse.json(
+      { error: "Essa prova não tem Função definida, não é possível gerar link de aplicação pra ela." },
+      { status: 400 },
+    );
+  }
 
   const body = await request.json().catch(() => null);
   const kind = body?.kind === "direcionada" ? "direcionada" : "geral";

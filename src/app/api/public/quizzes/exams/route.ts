@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { exams, questions, roles } from "@/db/schema";
+import { documents } from "@/db/schema";
 
 // Rota pública — usada na tela de Quizzes: depois que o colaborador escolhe
-// o Contrato, listamos todas as provas ativas (IT/APR) desse Contrato, de
-// qualquer Função (no Quiz não se escolhe Função, só o IT/APR direto), com
-// pelo menos 1 questão cadastrada.
+// o Contrato, listamos todos os IT/APR da Biblioteca desse Contrato (de
+// qualquer Função — o Quiz gera as perguntas na hora, via IA, direto do PDF,
+// então não depende de nenhuma prova pré-cadastrada nem de Função).
 export async function GET(req: NextRequest) {
   const sectorId = Number(req.nextUrl.searchParams.get("sectorId"));
   if (!sectorId) {
@@ -15,30 +15,19 @@ export async function GET(req: NextRequest) {
 
   const rows = await db
     .select({
-      id: exams.id,
-      title: exams.title,
-      summary: exams.summary,
-      documentType: exams.documentType,
-      roleName: roles.name,
-      questionCount: sql<number>`count(distinct ${questions.id})`.mapWith(Number),
+      id: documents.id,
+      fileName: documents.fileName,
+      documentType: documents.documentType,
     })
-    .from(exams)
-    .innerJoin(roles, eq(exams.roleId, roles.id))
-    .innerJoin(questions, eq(questions.examId, exams.id))
-    .where(and(eq(exams.sectorId, sectorId), eq(exams.active, true)))
-    .groupBy(exams.id, exams.title, exams.summary, exams.documentType, roles.name)
-    .orderBy(asc(exams.documentType), asc(exams.title));
+    .from(documents)
+    .where(eq(documents.sectorId, sectorId))
+    .orderBy(asc(documents.documentType), asc(documents.fileName));
 
   return NextResponse.json({
-    exams: rows
-      .filter((r) => r.questionCount > 0)
-      .map((r) => ({
-        id: r.id,
-        title: r.title,
-        summary: r.summary,
-        documentType: r.documentType,
-        roleName: r.roleName,
-        questionCount: r.questionCount,
-      })),
+    exams: rows.map((r) => ({
+      id: r.id,
+      title: r.fileName.replace(/\.pdf$/i, ""),
+      documentType: r.documentType,
+    })),
   });
 }

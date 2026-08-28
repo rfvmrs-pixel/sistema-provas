@@ -1,32 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { exams, questions } from "@/db/schema";
+import { documents } from "@/db/schema";
 
-// Rota pública (sem login) — lista as provas ativas (IT/APR) de um
-// Contrato+Função, pra tela de Simulado (autosserviço) mostrar as opções
-// depois que o colaborador escolhe o Contrato e a Função.
+// Rota pública (sem login) — lista os IT/APR da Biblioteca de um Contrato,
+// pra tela de Simulado (autosserviço) mostrar as opções depois que o
+// colaborador escolhe o Contrato. Não depende mais de Função nem de prova
+// pré-cadastrada: o Simulado gera a prova (10 perguntas) na hora, via IA,
+// direto do PDF escolhido — ver /api/public/simulado/start.
 export async function GET(req: NextRequest) {
   const sectorId = Number(req.nextUrl.searchParams.get("sectorId"));
-  const roleId = Number(req.nextUrl.searchParams.get("roleId"));
-  if (!sectorId || !roleId) {
-    return NextResponse.json({ error: "Informe o Contrato e a Função." }, { status: 400 });
+  if (!sectorId) {
+    return NextResponse.json({ error: "Informe o Contrato." }, { status: 400 });
   }
 
-  const list = await db
-    .select({
-      id: exams.id,
-      title: exams.title,
-      summary: exams.summary,
-      passingScore: exams.passingScore,
-      documentType: exams.documentType,
-      questionCount: sql<number>`count(${questions.id})`.mapWith(Number),
-    })
-    .from(exams)
-    .innerJoin(questions, eq(questions.examId, exams.id))
-    .where(and(eq(exams.sectorId, sectorId), eq(exams.roleId, roleId), eq(exams.active, true)))
-    .groupBy(exams.id)
-    .orderBy(desc(exams.createdAt));
+  const rows = await db
+    .select({ id: documents.id, fileName: documents.fileName, documentType: documents.documentType })
+    .from(documents)
+    .where(eq(documents.sectorId, sectorId))
+    .orderBy(asc(documents.documentType), asc(documents.fileName));
 
-  return NextResponse.json({ exams: list.filter((e) => e.questionCount > 0) });
+  return NextResponse.json({
+    exams: rows.map((r) => ({
+      id: r.id,
+      title: r.fileName.replace(/\.pdf$/i, ""),
+      documentType: r.documentType,
+    })),
+  });
 }

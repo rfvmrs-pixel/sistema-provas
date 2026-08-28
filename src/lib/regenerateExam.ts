@@ -31,7 +31,11 @@ export async function regenerateExamQuestions(
     throw new RegenerateExamError("Escolha um PDF do mesmo Contrato desta prova.");
   }
 
-  const role = await db.query.roles.findFirst({ where: eq(roles.id, exam.roleId) });
+  // exam.roleId pode ser null pra provas auto-geradas pelo Simulado
+  // autosserviço (ver /api/public/simulado/start) — nesse caso a geração
+  // segue sem roleName, valendo pra qualquer Função (mesmo comportamento da
+  // criação original dessas provas).
+  const role = exam.roleId ? await db.query.roles.findFirst({ where: eq(roles.id, exam.roleId) }) : undefined;
 
   const [{ count: currentQuestionCount }] = await db
     .select({ count: sql<number>`count(*)`.mapWith(Number) })
