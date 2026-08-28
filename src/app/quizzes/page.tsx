@@ -38,8 +38,8 @@ type QuizSession = { name: string; matricula: string; sectorId: number; sectorNa
 type Step =
   | { kind: "form" }
   | { kind: "pick" }
-  | { kind: "quiz"; token: string; examTitle: string; documentType: string; questions: QuizQuestion[]; secondsPerQuestion: number }
-  | { kind: "result"; examTitle: string; data: GradeResult };
+  | { kind: "quiz"; examId: number; token: string; examTitle: string; documentType: string; questions: QuizQuestion[]; secondsPerQuestion: number }
+  | { kind: "result"; examId: number; examTitle: string; data: GradeResult };
 
 function DocBadge({ documentType }: { documentType: string }) {
   const isApr = documentType === "APR";
@@ -152,6 +152,7 @@ export default function QuizzesPage() {
       }
       setStep({
         kind: "quiz",
+        examId: data.examId,
         token: data.token,
         examTitle: data.examTitle,
         documentType: data.documentType,
@@ -185,7 +186,7 @@ export default function QuizzesPage() {
         body: JSON.stringify({ token: step.token, answers: finalAnswers }),
       });
       const data: GradeResult = await res.json();
-      setStep({ kind: "result", examTitle: step.examTitle, data });
+      setStep({ kind: "result", examId: step.examId, examTitle: step.examTitle, data });
     } catch {
       // volta pro quiz se der erro de conexão; usuário pode tentar de novo
       setGrading(false);
@@ -241,7 +242,53 @@ export default function QuizzesPage() {
     setCurrentIndex(0);
     setAnswers({});
     autoAdvancedIndexRef.current = -1;
+    setComicImages(null);
+    setComicSelected(null);
+    setComicFeedback(null);
     setStep({ kind: "pick" });
+  }
+
+  // ---- Quadrinho de segurança (opcional, só aparece se a prova tiver um) ----
+  const [comicImages, setComicImages] = useState<string[] | null>(null);
+  const [comicSelected, setComicSelected] = useState<number | null>(null);
+  const [comicFeedback, setComicFeedback] = useState<{ correct: boolean; correctIndex: number; explanation: string | null } | null>(null);
+  const [comicChecking, setComicChecking] = useState(false);
+
+  useEffect(() => {
+    if (step.kind !== "result") return;
+    let cancelled = false;
+    async function loadComic() {
+      if (step.kind !== "result") return;
+      try {
+        const res = await fetch(`/api/public/quizzes/comic?examId=${step.examId}`);
+        const data = await res.json();
+        if (!cancelled) setComicImages(data.hasComic ? data.images : null);
+      } catch {
+        if (!cancelled) setComicImages(null);
+      }
+    }
+    loadComic();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.kind, step.kind === "result" ? step.examId : null]);
+
+  async function checkComicAnswer(index: number) {
+    if (step.kind !== "result" || comicFeedback) return;
+    setComicSelected(index);
+    setComicChecking(true);
+    try {
+      const res = await fetch("/api/public/quizzes/comic/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ examId: step.examId, selectedIndex: index }),
+      });
+      const data = await res.json();
+      if (res.ok) setComicFeedback(data);
+    } finally {
+      setComicChecking(false);
+    }
   }
 
   const secondsLeft = Math.ceil(remainingMs / 1000);
@@ -515,6 +562,47 @@ export default function QuizzesPage() {
                 ))}
               </div>
             </div>
+
+            {comicImages && comicImages.length === 4 && (
+              <div className="mt-5 w-full overflow-hidden rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm sm:p-8">
+                <h2 className="text-sm font-semibold text-slate-900">Quadrinho de segurança</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Qual das 4 imagens mostra a forma correta de executar essa atividade?
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {comicImages.map((src, i) => {
+                    const isSelected = comicSelected === i;
+                    const isCorrectReveal = comicFeedback && i === comicFeedback.correctIndex;
+                    const isWrongPick = comicFeedback && isSelected && !comicFeedback.correct;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => checkComicAnswer(i)}
+                        disabled={comicChecking || !!comicFeedback}
+                        className={`overflow-hidden rounded-xl border-2 transition ${
+                          isCorrectReveal
+                            ? "border-emerald-500"
+                            : isWrongPick
+                              ? "border-red-500"
+                              : isSelected
+                                ? "border-indigo-400"
+                                : "border-transparent hover:border-indigo-200"
+                        } disabled:cursor-default`}
+                      >
+                        <img src={src} alt={`Opção ${i + 1}`} className="aspect-square w-full object-cover" />
+                      </button>
+                    );
+                  })}
+                </div>
+                {comicFeedback && (
+                  <p className={`mt-3 text-sm font-medium ${comicFeedback.correct ? "text-emerald-700" : "text-red-600"}`}>
+                    {comicFeedback.correct ? "Isso mesmo! " : "Não é essa. "}
+                    {comicFeedback.explanation}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="mt-5 flex w-full flex-col gap-2.5 sm:flex-row">
               <button

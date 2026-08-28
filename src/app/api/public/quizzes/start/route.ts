@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     token,
+    examId: exam.id,
     examTitle: exam.title,
     documentType: exam.documentType,
     secondsPerQuestion: QUIZ_SECONDS_PER_QUESTION,

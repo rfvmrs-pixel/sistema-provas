@@ -201,6 +201,25 @@ export const questions = pgTable(
   (t) => [index("questions_exam_idx").on(t.examId)],
 );
 
+// ---------- Quadrinho de segurança (Quizzes) ----------
+// Desafio de "qual desenho está certo": 4 imagens (uma correta, três
+// incorretas/decoy) associadas a UMA prova (IT/APR) — o colaborador marca
+// qual delas retrata certo a atividade. Estrutura pronta desde já; o
+// conteúdo (as 4 imagens de cada IT/APR) é cadastrado pelo gestor depois —
+// enquanto não existir um quadrinho pra uma prova, a etapa simplesmente não
+// aparece no Quiz. `images`: array de 4 data URLs (base64) na ordem A-D.
+export const examComics = pgTable("exam_comics", {
+  id: serial("id").primaryKey(),
+  examId: integer("exam_id")
+    .notNull()
+    .unique()
+    .references(() => exams.id, { onDelete: "cascade" }),
+  images: jsonb("images").notNull(),
+  correctIndex: integer("correct_index").notNull(),
+  explanation: text("explanation"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ---------- Links de aplicação de prova ----------
 // O gestor gera um link público pra aplicar uma prova sem precisar
 // pré-cadastrar ninguém: quem abre o link se autocadastra (nome, matrícula,
@@ -353,6 +372,11 @@ export const examsRelations = relations(exams, ({ one, many }) => ({
   sector: one(sectors, { fields: [exams.sectorId], references: [sectors.id] }),
   role: one(roles, { fields: [exams.roleId], references: [roles.id] }),
   document: one(documents, { fields: [exams.documentId], references: [documents.id] }),
+  comic: one(examComics, { fields: [exams.id], references: [examComics.examId] }),
+}));
+
+export const examComicsRelations = relations(examComics, ({ one }) => ({
+  exam: one(exams, { fields: [examComics.examId], references: [exams.id] }),
 }));
 
 export const examLinksRelations = relations(examLinks, ({ one, many }) => ({
