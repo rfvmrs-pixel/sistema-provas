@@ -593,18 +593,41 @@ export default function HomePage() {
                   className="mt-10 scroll-mt-20 rounded-xl border border-slate-200 bg-white p-6 text-left shadow-sm"
                 >
                   <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                    Simulados
+                    Provas e Simulados
                   </h2>
                   <p className="mt-1 text-xs text-slate-500">
-                    Qualquer colaborador pode escolher o Contrato, a Função e o tipo de documento (IT
-                    ou APR) e realizar uma prova de treinamento. O resultado também fica registrado.
+                    Dois jeitos de acessar, cada um com seu próprio botão — cada prova tem no máximo
+                    10 minutos para ser respondida.
                   </p>
-                  <Link
-                    href="/prova"
-                    className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
-                  >
-                    Fazer uma prova / simulado
-                  </Link>
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="text-sm font-semibold text-slate-900">Simulado</h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Sem senha. Informe nome, matrícula, Contrato e Função, e escolha livremente
+                        qual IT ou APR quer praticar.
+                      </p>
+                      <Link
+                        href="/simulado"
+                        className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+                      >
+                        Fazer um Simulado
+                      </Link>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="text-sm font-semibold text-slate-900">Prova oficial</h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Com sua senha pessoal ou o código da prova do dia passado pelo seu gestor. O
+                        resultado fica registrado nos relatórios.
+                      </p>
+                      <Link
+                        href="/prova"
+                        className="mt-3 inline-block rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                      >
+                        Fazer prova oficial
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               </>
             )}

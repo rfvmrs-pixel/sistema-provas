@@ -137,5 +137,6 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ token:
     examTitle: currentExam.title,
     passingScore: currentExam.passingScore,
     questions: examQuestions,
+    startedAt: attempt.startedAt,
   });
 }
