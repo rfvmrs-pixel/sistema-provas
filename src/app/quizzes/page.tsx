@@ -104,6 +104,7 @@ export default function QuizzesPage() {
     const sector = sectors.find((s) => s.id === Number(sectorId));
     if (!sector) return;
     setSession({ name: name.trim(), matricula: matricula.trim(), sectorId: sector.id, sectorName: sector.name });
+    setDocFilter("IT");
     setStep({ kind: "pick" });
   }
 
@@ -112,6 +113,9 @@ export default function QuizzesPage() {
   const [examsLoading, setExamsLoading] = useState(false);
   const [examsError, setExamsError] = useState<string | null>(null);
   const [starting, setStarting] = useState<number | null>(null);
+  // Filtro 1 (IT ou APR) — o filtro 2 é a lista de cartões abaixo, já
+  // restrita ao tipo escolhido aqui.
+  const [docFilter, setDocFilter] = useState<"IT" | "APR">("IT");
 
   useEffect(() => {
     if (step.kind !== "pick" || !session) return;
@@ -135,6 +139,24 @@ export default function QuizzesPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step.kind, session?.sectorId]);
+
+  // Se o filtro atual (IT ou APR) não tem nenhuma prova nesse Contrato mas o
+  // outro tipo tem, troca o filtro automaticamente pra não mostrar uma lista
+  // vazia por padrão.
+  useEffect(() => {
+    function pickDefaultFilter() {
+      if (examsLoading || exams.length === 0) return;
+      const hasCurrent = exams.some((e) => e.documentType === docFilter);
+      if (hasCurrent) return;
+      const other = exams.find((e) => e.documentType !== docFilter);
+      if (other) setDocFilter(other.documentType === "APR" ? "APR" : "IT");
+    }
+    pickDefaultFilter();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examsLoading, exams]);
+
+  const filteredExams = exams.filter((e) => e.documentType === docFilter);
+  const availableDocTypes = Array.from(new Set(exams.map((e) => e.documentType)));
 
   async function pickExam(exam: QuizExam) {
     if (!session) return;
@@ -394,15 +416,40 @@ export default function QuizzesPage() {
 
             {examsError && <p className="mt-4 text-sm text-red-600">{examsError}</p>}
 
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {!examsLoading && exams.length > 0 && (
+              <div className="mt-5">
+                <p className="text-xs font-medium text-slate-500">Tipo de documento</p>
+                <div className="mt-1.5 inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1">
+                  {(["IT", "APR"] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setDocFilter(type)}
+                      disabled={!availableDocTypes.includes(type)}
+                      className={`rounded-md px-4 py-1.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                        docFilter === type ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {examsLoading ? (
                 <p className="text-sm text-slate-400">Carregando...</p>
               ) : exams.length === 0 ? (
                 <p className="text-sm text-slate-400">
                   Nenhum IT/APR com perguntas disponível para esse Contrato ainda.
                 </p>
+              ) : filteredExams.length === 0 ? (
+                <p className="text-sm text-slate-400">
+                  Nenhum {docFilter} disponível para esse Contrato ainda.
+                </p>
               ) : (
-                exams.map((exam) => (
+                filteredExams.map((exam) => (
                   <button
                     key={exam.id}
                     type="button"
