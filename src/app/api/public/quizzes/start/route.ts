@@ -5,7 +5,7 @@ import { exams, questions } from "@/db/schema";
 import { signQuizToken } from "@/lib/quizToken";
 
 export const QUIZ_QUESTION_COUNT = 5;
-export const QUIZ_SECONDS_PER_QUESTION = 30;
+export const QUIZ_SECONDS_PER_QUESTION = 90;
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
