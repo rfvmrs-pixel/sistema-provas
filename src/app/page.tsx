@@ -593,14 +593,14 @@ export default function HomePage() {
                   className="mt-10 scroll-mt-20 rounded-xl border border-slate-200 bg-white p-6 text-left shadow-sm"
                 >
                   <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                    Provas e Simulados
+                    Provas, Simulados e Quizzes
                   </h2>
                   <p className="mt-1 text-xs text-slate-500">
-                    Dois jeitos de acessar, cada um com seu próprio botão — cada prova tem no máximo
+                    Três jeitos de acessar, cada um com seu próprio botão — cada prova tem no máximo
                     10 minutos para ser respondida.
                   </p>
 
-                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
                       <h3 className="text-sm font-semibold text-slate-900">Simulado</h3>
                       <p className="mt-1 text-xs text-slate-500">
@@ -627,6 +627,28 @@ export default function HomePage() {
                         Fazer prova oficial
                       </Link>
                     </div>
+                    <Link
+                      href="/quizzes"
+                      className="group relative overflow-hidden rounded-xl border border-indigo-200 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                    >
+                      <Image
+                        src="/quizzes/quizzes-card.jpg"
+                        alt=""
+                        fill
+                        className="object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-700/90 via-violet-700/85 to-fuchsia-600/80" />
+                      <div className="relative">
+                        <h3 className="text-sm font-semibold text-white">Quizzes</h3>
+                        <p className="mt-1 text-xs text-indigo-50">
+                          5 perguntas rápidas, 30s cada — pratique um IT ou APR de um jeito leve e
+                          divertido.
+                        </p>
+                        <span className="mt-3 inline-block rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-indigo-700 transition group-hover:bg-indigo-50">
+                          Abrir Quizzes
+                        </span>
+                      </div>
+                    </Link>
                   </div>
                 </div>
               </>
