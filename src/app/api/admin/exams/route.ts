@@ -32,6 +32,7 @@ export async function GET() {
       active: exams.active,
       passingScore: exams.passingScore,
       documentType: exams.documentType,
+      category: exams.category,
       documentId: exams.documentId,
       createdAt: exams.createdAt,
       sectorId: exams.sectorId,
@@ -64,8 +65,6 @@ export async function POST(request: NextRequest) {
 
   const documentId = Number(body.documentId);
   const roleId = Number(body.roleId);
-  const documentTypeRaw = typeof body.documentType === "string" ? body.documentType.toUpperCase() : "";
-  const documentType: DocumentType = documentTypeRaw === "APR" ? "APR" : "IT";
   const numQuestionsRaw = Number(body.numQuestions);
   const numQuestions = ALLOWED_QUESTION_COUNTS.includes(numQuestionsRaw) ? numQuestionsRaw : 15;
 
@@ -84,6 +83,11 @@ export async function POST(request: NextRequest) {
       { status: 403 },
     );
   }
+
+  // Tipo sempre vem do próprio documento (IT/APR/MANUAL definido no upload
+  // da Biblioteca) — evita divergência entre o que foi enviado e o que o
+  // client possa mandar aqui.
+  const documentType = document.documentType as DocumentType;
 
   const [sector, role] = await Promise.all([
     db.query.sectors.findFirst({ where: eq(sectors.id, document.sectorId) }),
@@ -114,6 +118,7 @@ export async function POST(request: NextRequest) {
       sourceFileName: document.fileName,
       summary: generated.summary,
       documentType,
+      category: document.category,
       documentId: document.id,
       sectorId: document.sectorId,
       roleId,

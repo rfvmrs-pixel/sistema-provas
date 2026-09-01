@@ -40,6 +40,7 @@ async function findOrCreateAutoExam(document: typeof documents.$inferSelect) {
       sourceFileName: document.fileName,
       summary: generated.summary,
       documentType,
+      category: document.category,
       documentId: document.id,
       sectorId: document.sectorId,
       roleId: null,

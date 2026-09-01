@@ -203,18 +203,23 @@ export default async function AdminDashboardPage() {
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">IT x APR</h2>
+          <h2 className="text-sm font-semibold text-slate-900">IT x APR x MANUAL</h2>
           <p className="text-xs text-slate-500">
-            Compara o desempenho em provas de Instrução de Trabalho (IT) com as de Análise
-            Preliminar de Risco (APR) — ajuda a apontar se falta mais conhecimento de processo ou
-            de segurança.
+            Compara o desempenho em provas de Instrução de Trabalho (IT), Análise Preliminar de
+            Risco (APR) e manuais de equipamento (MANUAL) — ajuda a apontar se falta mais
+            conhecimento de processo, de segurança ou do próprio equipamento.
           </p>
           <div className="mt-4">
             <MeterBarList
               emptyMessage="Ainda sem provas respondidas para comparar."
               items={documentTypeSummary.map((d) => ({
                 id: d.documentType,
-                label: d.documentType === "APR" ? "APR (Análise Preliminar de Risco)" : "IT (Instrução de Trabalho)",
+                label:
+                  d.documentType === "APR"
+                    ? "APR (Análise Preliminar de Risco)"
+                    : d.documentType === "MANUAL"
+                      ? "MANUAL (manual de equipamento)"
+                      : "IT (Instrução de Trabalho)",
                 value: d.avgScore,
                 sublabel: `${d.attemptCount} ${d.attemptCount === 1 ? "tentativa" : "tentativas"}`,
               }))}

@@ -54,7 +54,17 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
 
   const file = form.get("file");
   const documentTypeRaw = form.get("documentType");
-  const documentType = documentTypeRaw === "APR" ? "APR" : documentTypeRaw === "IT" ? "IT" : existing.documentType;
+  const documentType =
+    documentTypeRaw === "APR" || documentTypeRaw === "IT" || documentTypeRaw === "MANUAL"
+      ? documentTypeRaw
+      : existing.documentType;
+  const categoryRaw = form.get("category");
+  const category =
+    typeof categoryRaw === "string"
+      ? categoryRaw.trim()
+        ? categoryRaw.trim().slice(0, 100)
+        : null
+      : existing.category;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Nenhum arquivo PDF enviado." }, { status: 400 });
@@ -83,6 +93,7 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
     .set({
       fileName: file.name,
       documentType,
+      category,
       extractedText,
       fileData: buffer.toString("base64"),
       fileSize: file.size,
@@ -93,6 +104,7 @@ export async function PUT(request: NextRequest, ctx: { params: Promise<{ id: str
       id: documents.id,
       fileName: documents.fileName,
       documentType: documents.documentType,
+      category: documents.category,
       fileSize: documents.fileSize,
       uploadedAt: documents.uploadedAt,
       sectorId: documents.sectorId,

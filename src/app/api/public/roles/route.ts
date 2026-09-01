@@ -11,6 +11,9 @@ import { roles } from "@/db/schema";
 // pra qualquer Função. Por isso aqui devolvemos todas as Funções cadastradas,
 // sem depender de existir prova pra elas em nenhum Contrato.
 export async function GET() {
-  const rows = await db.select({ id: roles.id, name: roles.name }).from(roles).orderBy(asc(roles.name));
+  const rows = await db
+    .select({ id: roles.id, name: roles.name, isOperator: roles.isOperator })
+    .from(roles)
+    .orderBy(asc(roles.name));
   return NextResponse.json({ roles: rows });
 }

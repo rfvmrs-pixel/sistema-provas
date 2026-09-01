@@ -6,7 +6,7 @@ import { useIsReadOnlyAdmin } from "../../AdminRoleContext";
 
 type Sector = { id: number; name: string };
 type Role = { id: number; name: string };
-type DocumentType = "IT" | "APR";
+type DocumentType = "IT" | "APR" | "MANUAL";
 type Option = { key: string; text: string };
 type Question = {
   id: number;
@@ -283,7 +283,11 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
           {exam.title}{" "}
           <span
             className={`align-middle rounded-full px-2 py-0.5 text-xs font-medium ${
-              exam.documentType === "APR" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700"
+              exam.documentType === "APR"
+                ? "bg-amber-100 text-amber-700"
+                : exam.documentType === "MANUAL"
+                  ? "bg-violet-100 text-violet-700"
+                  : "bg-sky-100 text-sky-700"
             }`}
           >
             {exam.documentType}

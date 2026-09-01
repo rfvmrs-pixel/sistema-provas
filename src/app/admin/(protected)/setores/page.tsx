@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 type Sector = { id: number; name: string };
-type Gestor = { id: number; username: string };
+type Gestor = { id: number; username: string; role?: string };
 type DirectorRole = "diretoria" | "superintendencia";
 type Director = {
   id: number;
@@ -23,7 +23,10 @@ export default function ContratosPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingGestorFor, setSavingGestorFor] = useState<number | null>(null);
-  const [gestorForm, setGestorForm] = useState<Record<number, { username: string; password: string }>>({});
+  const [gestorForm, setGestorForm] = useState<
+    Record<number, { username: string; password: string; fullAccess: boolean }>
+  >({});
+  const [gestorNotice, setGestorNotice] = useState<Record<number, string>>({});
 
   // Conta(s) de Diretoria/Superintendência: enxergam todos os Contratos e as
   // estatísticas da empresa, mas são só leitura (não editam nada). Os dois
@@ -142,18 +145,31 @@ export default function ContratosPage() {
     const form = gestorForm[sectorId];
     if (!form?.username || !form?.password) return;
     setSavingGestorFor(sectorId);
+    setGestorNotice((m) => ({ ...m, [sectorId]: "" }));
     try {
       const res = await fetch(`/api/admin/sectors/${sectorId}/gestor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: form.username, password: form.password }),
+        body: JSON.stringify({
+          username: form.username,
+          password: form.password,
+          fullAccess: form.fullAccess,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         alert(data.error);
         return;
       }
-      setGestorForm((m) => ({ ...m, [sectorId]: { username: "", password: "" } }));
+      if (form.fullAccess) {
+        setGestorNotice((m) => ({
+          ...m,
+          [sectorId]:
+            `Conta "${form.username}" criada com acesso total (enxerga e gerencia todos os Contratos, ` +
+            `inclusive os criados depois) — por isso ela não aparece na lista de gestores abaixo.`,
+        }));
+      }
+      setGestorForm((m) => ({ ...m, [sectorId]: { username: "", password: "", fullAccess: false } }));
       load();
     } finally {
       setSavingGestorFor(null);
@@ -209,7 +225,8 @@ export default function ContratosPage() {
           <ul className="divide-y divide-slate-100">
             {sectors.map((s) => {
               const gestores = gestoresBySector[s.id] ?? [];
-              const form = gestorForm[s.id] ?? { username: "", password: "" };
+              const form = gestorForm[s.id] ?? { username: "", password: "", fullAccess: false };
+              const notice = gestorNotice[s.id];
               return (
                 <li key={s.id} className="px-5 py-4">
                   <div className="flex items-center justify-between">
@@ -228,7 +245,7 @@ export default function ContratosPage() {
                       <>Gestor(es): {gestores.map((g) => g.username).join(", ")}</>
                     )}
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <input
                       value={form.username}
                       onChange={(e) =>
@@ -246,6 +263,16 @@ export default function ContratosPage() {
                       placeholder="Senha (nova/redefinir)"
                       className="w-40 rounded-md border border-slate-300 px-2 py-1 text-xs focus:border-slate-500 focus:outline-none"
                     />
+                    <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={form.fullAccess}
+                        onChange={(e) =>
+                          setGestorForm((m) => ({ ...m, [s.id]: { ...form, fullAccess: e.target.checked } }))
+                        }
+                      />
+                      Acesso total (como admin geral) — ex.: conta do SMS
+                    </label>
                     <button
                       onClick={() => handleSaveGestor(s.id)}
                       disabled={savingGestorFor === s.id || !form.username || !form.password}
@@ -254,6 +281,7 @@ export default function ContratosPage() {
                       {savingGestorFor === s.id ? "Salvando..." : "Criar/redefinir gestor"}
                     </button>
                   </div>
+                  {notice && <p className="mt-2 text-xs text-emerald-700">{notice}</p>}
                 </li>
               );
             })}
