@@ -23,6 +23,7 @@ export async function GET() {
       id: documents.id,
       fileName: documents.fileName,
       documentType: documents.documentType,
+      category: documents.category,
       fileSize: documents.fileSize,
       uploadedAt: documents.uploadedAt,
       sectorId: documents.sectorId,
@@ -53,7 +54,10 @@ export async function POST(request: NextRequest) {
   const file = form.get("file");
   const sectorId = Number(form.get("sectorId"));
   const documentTypeRaw = form.get("documentType");
-  const documentType = documentTypeRaw === "APR" ? "APR" : "IT";
+  const documentType =
+    documentTypeRaw === "APR" ? "APR" : documentTypeRaw === "MANUAL" ? "MANUAL" : "IT";
+  const categoryRaw = form.get("category");
+  const category = typeof categoryRaw === "string" && categoryRaw.trim() ? categoryRaw.trim().slice(0, 100) : null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Nenhum arquivo PDF enviado." }, { status: 400 });
@@ -95,6 +99,7 @@ export async function POST(request: NextRequest) {
       sectorId,
       fileName: file.name,
       documentType,
+      category,
       extractedText,
       fileData: buffer.toString("base64"),
       fileSize: file.size,
@@ -103,6 +108,7 @@ export async function POST(request: NextRequest) {
       id: documents.id,
       fileName: documents.fileName,
       documentType: documents.documentType,
+      category: documents.category,
       fileSize: documents.fileSize,
       uploadedAt: documents.uploadedAt,
       sectorId: documents.sectorId,

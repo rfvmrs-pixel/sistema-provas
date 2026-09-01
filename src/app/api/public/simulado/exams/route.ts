@@ -15,7 +15,12 @@ export async function GET(req: NextRequest) {
   }
 
   const rows = await db
-    .select({ id: documents.id, fileName: documents.fileName, documentType: documents.documentType })
+    .select({
+      id: documents.id,
+      fileName: documents.fileName,
+      documentType: documents.documentType,
+      category: documents.category,
+    })
     .from(documents)
     .where(eq(documents.sectorId, sectorId))
     .orderBy(asc(documents.documentType), asc(documents.fileName));
@@ -25,6 +30,7 @@ export async function GET(req: NextRequest) {
       id: r.id,
       title: r.fileName.replace(/\.pdf$/i, ""),
       documentType: r.documentType,
+      category: r.category,
     })),
   });
 }

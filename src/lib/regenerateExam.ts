@@ -49,7 +49,7 @@ export async function regenerateExamQuestions(
       ? currentQuestionCount
       : 15;
 
-  const documentType = (exam.documentType === "APR" ? "APR" : "IT") as DocumentType;
+  const documentType = (document.documentType || exam.documentType) as DocumentType;
 
   const generated = await generateExamFromText(document.extractedText, {
     numQuestions,
@@ -80,6 +80,8 @@ export async function regenerateExamQuestions(
       title: generated.title || document.fileName,
       sourceFileName: document.fileName,
       summary: generated.summary,
+      documentType,
+      category: document.category,
       documentId: document.id,
       currentVersion: exam.currentVersion + 1,
     })

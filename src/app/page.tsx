@@ -596,22 +596,35 @@ export default function HomePage() {
                     Provas e Simulados
                   </h2>
                   <p className="mt-1 text-xs text-slate-500">
-                    Dois jeitos de acessar, cada um com seu próprio botão — cada prova tem no máximo
-                    10 minutos para ser respondida.
+                    Três jeitos de acessar, cada um com seu próprio botão — cada prova tem no
+                    máximo 10 minutos para ser respondida.
                   </p>
 
-                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
                       <h3 className="text-sm font-semibold text-slate-900">Simulado</h3>
                       <p className="mt-1 text-xs text-slate-500">
                         Sem senha. Informe nome, matrícula, Contrato e Função, e escolha livremente
-                        qual IT ou APR quer praticar.
+                        qual IT, APR ou MANUAL quer praticar.
                       </p>
                       <Link
                         href="/simulado"
                         className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
                       >
                         Fazer um Simulado
+                      </Link>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="text-sm font-semibold text-slate-900">Simulado de Operadores</h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Mesmo simulado livre, sem senha, mas com a lista de Função filtrada só pras
+                        funções de Operador (guindaste, empilhadeira...).
+                      </p>
+                      <Link
+                        href="/simulado/operadores"
+                        className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+                      >
+                        Simulado de Operadores
                       </Link>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">

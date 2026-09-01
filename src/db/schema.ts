@@ -69,6 +69,12 @@ export const adminSectors = pgTable(
 export const roles = pgTable("roles", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 150 }).notNull().unique(),
+  // Marca funções que são "Operador" (ex.: Operador de Guindaste, Operador
+  // de Empilhadeira...) — usado pra filtrar a aba pública de Simulados de
+  // Operadores (/simulado/operadores), que só lista essas funções no lugar
+  // da lista completa. Não afeta nada mais no sistema (autocadastro,
+  // relatórios etc. continuam iguais).
+  isOperator: boolean("is_operator").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -134,9 +140,16 @@ export const documents = pgTable(
       .notNull()
       .references(() => sectors.id, { onDelete: "cascade" }),
     fileName: varchar("file_name", { length: 300 }).notNull(),
-    // IT (Instrução de Trabalho) ou APR (Análise Preliminar de Risco) —
+    // IT (Instrução de Trabalho), APR (Análise Preliminar de Risco) ou
+    // MANUAL (manual de equipamento — usado principalmente pelo setor
+    // Treinamentos, gera perguntas técnicas + de uso do equipamento) —
     // definido no upload, guia o filtro em Provas > Gerar prova.
     documentType: varchar("document_type", { length: 10 }).default("IT").notNull(),
+    // Categoria livre (ex.: "Guindastes", "Empilhadeiras"...) pra organizar
+    // os documentos de Treinamentos por tipo de equipamento — o gestor
+    // digita na hora do upload, sem precisar de tela de cadastro separada.
+    // Opcional; qualquer Contrato pode usar, não só Treinamentos.
+    category: varchar("category", { length: 100 }),
     extractedText: text("extracted_text").notNull(),
     // Arquivo original em base64, pra manter o PDF de fato "salvo no sistema"
     // (não só o texto extraído) e permitir baixar/conferir depois.
@@ -157,9 +170,14 @@ export const exams = pgTable(
     summary: text("summary"),
     active: boolean("active").default(true).notNull(),
     passingScore: integer("passing_score").default(70).notNull(), // % mínimo p/ considerar aprovado
-    // Tipo do documento de origem: IT (Instrução de Trabalho) ou APR (Análise
-    // Preliminar de Risco). Influencia o prompt de geração das questões.
+    // Tipo do documento de origem: IT (Instrução de Trabalho), APR (Análise
+    // Preliminar de Risco) ou MANUAL (manual de equipamento). Influencia o
+    // prompt de geração das questões.
     documentType: varchar("document_type", { length: 10 }).default("IT").notNull(),
+    // Copiado do documento de origem no momento da geração — categoria livre
+    // (ex.: "Guindastes") pra filtrar provas/simulados por tipo de
+    // equipamento, principalmente em Treinamentos.
+    category: varchar("category", { length: 100 }),
     // De qual documento da biblioteca essa prova foi gerada (se veio de lá).
     // set null: apagar o PDF da biblioteca não apaga as provas já geradas.
     documentId: integer("document_id").references(() => documents.id, { onDelete: "set null" }),

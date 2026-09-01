@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ExamRunner } from "@/components/exam/ExamRunner";
 
 type Sector = { id: number; name: string };
-type DocumentType = "IT" | "APR";
+type DocumentType = "IT" | "APR" | "MANUAL";
 type ExamListItem = {
   id: number;
   title: string;
@@ -234,7 +234,9 @@ export default function ProvaPage() {
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           ex.documentType === "APR"
                             ? "bg-amber-100 text-amber-700"
-                            : "bg-sky-100 text-sky-700"
+                            : ex.documentType === "MANUAL"
+                              ? "bg-violet-100 text-violet-700"
+                              : "bg-sky-100 text-sky-700"
                         }`}
                       >
                         {ex.documentType}

@@ -6,11 +6,17 @@ import { useIsReadOnlyAdmin } from "../AdminRoleContext";
 
 type Sector = { id: number; name: string };
 type Role = { id: number; name: string };
-type DocumentType = "IT" | "APR";
+type DocumentType = "IT" | "APR" | "MANUAL";
+const DOCUMENT_TYPE_BADGE: Record<DocumentType, string> = {
+  IT: "bg-sky-100 text-sky-700",
+  APR: "bg-amber-100 text-amber-700",
+  MANUAL: "bg-violet-100 text-violet-700",
+};
 type Document = {
   id: number;
   fileName: string;
   documentType: DocumentType;
+  category: string | null;
   fileSize: number;
   uploadedAt: string;
   sectorId: number;
@@ -24,6 +30,7 @@ type Exam = {
   active: boolean;
   passingScore: number;
   documentType: DocumentType;
+  category: string | null;
   createdAt: string;
   sectorId: number;
   sectorName: string;
@@ -200,6 +207,7 @@ export default function ProvasPage() {
             >
               <option value="IT">IT (Instrução de Trabalho)</option>
               <option value="APR">APR (Análise Preliminar de Risco)</option>
+              <option value="MANUAL">MANUAL (manual de equipamento)</option>
             </select>
           </div>
           <div className="sm:col-span-2">
@@ -213,7 +221,8 @@ export default function ProvasPage() {
               <option value="">Selecione...</option>
               {filteredDocuments.map((doc) => (
                 <option key={doc.id} value={doc.id}>
-                  {doc.fileName} ({doc.sectorName})
+                  {doc.fileName} ({doc.sectorName}
+                  {doc.category ? ` · ${doc.category}` : ""})
                 </option>
               ))}
             </select>
@@ -301,14 +310,15 @@ export default function ProvasPage() {
                   </td>
                   <td className="px-5 py-3">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        exam.documentType === "APR"
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-sky-100 text-sky-700"
-                      }`}
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${DOCUMENT_TYPE_BADGE[exam.documentType]}`}
                     >
                       {exam.documentType}
                     </span>
+                    {exam.category && (
+                      <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        {exam.category}
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-3 text-slate-500">{exam.sectorName}</td>
                   <td className="px-5 py-3 text-slate-500">{exam.roleName}</td>

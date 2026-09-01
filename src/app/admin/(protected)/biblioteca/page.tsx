@@ -4,16 +4,28 @@ import { useEffect, useState } from "react";
 import { useIsReadOnlyAdmin } from "../AdminRoleContext";
 
 type Sector = { id: number; name: string };
-type DocumentType = "IT" | "APR";
+type DocumentType = "IT" | "APR" | "MANUAL";
 type Document = {
   id: number;
   fileName: string;
   documentType: DocumentType;
+  category: string | null;
   fileSize: number;
   uploadedAt: string;
   sectorId: number;
   sectorName: string;
   examCount: number;
+};
+
+const DOCUMENT_TYPE_BADGE: Record<DocumentType, string> = {
+  IT: "bg-sky-100 text-sky-700",
+  APR: "bg-amber-100 text-amber-700",
+  MANUAL: "bg-violet-100 text-violet-700",
+};
+const DOCUMENT_TYPE_LABEL: Record<DocumentType, string> = {
+  IT: "IT (Instrução de Trabalho)",
+  APR: "APR (Análise Preliminar de Risco)",
+  MANUAL: "MANUAL (manual de equipamento)",
 };
 type DocumentComic = { id: number; images: string[]; correctIndex: number; explanation: string | null };
 
@@ -38,6 +50,11 @@ export default function BibliotecaPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [uploadSectorId, setUploadSectorId] = useState("");
   const [uploadDocumentType, setUploadDocumentType] = useState<DocumentType>("IT");
+  // Categoria livre (ex.: "Guindastes", "Empilhadeiras"...) — sobretudo pra
+  // organizar manuais de equipamento em Treinamentos, mas disponível pra
+  // qualquer Contrato/Tipo. Digitar um nome novo já "cria" a categoria, sem
+  // precisar de tela de cadastro separada.
+  const [uploadCategory, setUploadCategory] = useState("");
   const [updateTargetId, setUpdateTargetId] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -48,8 +65,11 @@ export default function BibliotecaPage() {
   // Filtro por Contrato, útil quando há vários Contratos cadastrados.
   // "" = Todos.
   const [contractFilter, setContractFilter] = useState("");
-  // Filtro por Tipo (IT/APR) — combina com o de Contrato. "" = Todos.
+  // Filtro por Tipo (IT/APR/MANUAL) — combina com o de Contrato. "" = Todos.
   const [typeFilter, setTypeFilter] = useState<"" | DocumentType>("");
+  // Filtro por Categoria (texto livre, ex.: "Guindastes") — combina com os
+  // outros dois.
+  const [categoryFilter, setCategoryFilter] = useState("");
 
   // ---- Quadrinho de segurança (Simulado) — 1 por documento, vale pra
   // qualquer Função, já que o Simulado gera as perguntas direto da Biblioteca. ----
@@ -197,6 +217,7 @@ export default function BibliotecaPage() {
         const form = new FormData();
         form.append("file", files[0]);
         form.append("documentType", uploadDocumentType);
+        form.append("category", uploadCategory);
         const res = await fetch(`/api/admin/documents/${updateTargetId}`, { method: "PUT", body: form });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}) as { error?: string });
@@ -229,6 +250,7 @@ export default function BibliotecaPage() {
           form.append("file", f);
           form.append("sectorId", uploadSectorId);
           form.append("documentType", uploadDocumentType);
+          form.append("category", uploadCategory);
           const res = await fetch("/api/admin/documents", { method: "POST", body: form });
           if (!res.ok) {
             const data = await res.json().catch(() => ({}) as { error?: string });
@@ -273,26 +295,29 @@ export default function BibliotecaPage() {
 
   const filteredDocuments = documents
     .filter((d) => !typeFilter || d.documentType === typeFilter)
-    .filter((d) => !contractFilter || String(d.sectorId) === contractFilter);
+    .filter((d) => !contractFilter || String(d.sectorId) === contractFilter)
+    .filter(
+      (d) => !categoryFilter || (d.category ?? "").toLowerCase().includes(categoryFilter.toLowerCase()),
+    );
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Biblioteca de PDFs</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Todas as ITs (Instrução de Trabalho) e APRs (Análise Preliminar de Risco) da empresa
-          ficam guardadas aqui, num lugar só, organizadas por Contrato. Suba o PDF uma vez e depois
-          gere (ou regere) quantas provas quiser a partir dele na aba Provas.
+          ITs (Instrução de Trabalho), APRs (Análise Preliminar de Risco) e MANUAIS de equipamento
+          da empresa ficam guardados aqui, num lugar só, organizados por Contrato. Suba o PDF uma
+          vez e depois gere (ou regere) quantas provas quiser a partir dele na aba Provas.
         </p>
       </div>
 
       {/* Tipo vem antes do Contrato de propósito: filtrar por Tipo primeiro
-          (IT ou APR) é o que a maioria usa pra achar um PDF específico numa
-          lista longa — e é o mesmo filtro que reaparece em Provas > Gerar
-          prova, na mesma ordem. */}
+          (IT, APR ou MANUAL) é o que a maioria usa pra achar um PDF
+          específico numa lista longa — e é o mesmo filtro que reaparece em
+          Provas > Gerar prova, na mesma ordem. */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-slate-500">Tipo:</span>
-        {(["", "IT", "APR"] as const).map((t) => (
+        {(["", "IT", "APR", "MANUAL"] as const).map((t) => (
           <button
             key={t || "todos"}
             onClick={() => setTypeFilter(t)}
@@ -302,9 +327,27 @@ export default function BibliotecaPage() {
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
-            {t === "" ? "Todos" : t === "IT" ? "IT (Instrução de Trabalho)" : "APR (Análise de Risco)"}
+            {t === "" ? "Todos" : DOCUMENT_TYPE_LABEL[t]}
           </button>
         ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-slate-500">Categoria:</span>
+        <input
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          placeholder="ex.: Guindastes, Empilhadeiras..."
+          className="w-56 rounded-md border border-slate-300 px-2 py-1 text-xs focus:border-slate-500 focus:outline-none"
+        />
+        {categoryFilter && (
+          <button
+            onClick={() => setCategoryFilter("")}
+            className="text-xs text-slate-500 hover:underline"
+          >
+            limpar
+          </button>
+        )}
       </div>
 
       {sectors.length > 1 && (
@@ -350,6 +393,7 @@ export default function BibliotecaPage() {
               setUploadMode("novo");
               setFiles([]);
               setUpdateTargetId("");
+              setUploadCategory("");
               (document.getElementById("pdf-input") as HTMLInputElement | null)?.value &&
                 ((document.getElementById("pdf-input") as HTMLInputElement).value = "");
             }}
@@ -412,7 +456,27 @@ export default function BibliotecaPage() {
             >
               <option value="IT">IT (Instrução de Trabalho)</option>
               <option value="APR">APR (Análise Preliminar de Risco)</option>
+              <option value="MANUAL">MANUAL (manual de equipamento)</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700">
+              Categoria (opcional — ex.: Guindastes, Empilhadeiras...)
+            </label>
+            <input
+              value={uploadCategory}
+              onChange={(e) => setUploadCategory(e.target.value)}
+              placeholder="Digite pra criar uma categoria nova"
+              list="categorias-existentes"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            />
+            <datalist id="categorias-existentes">
+              {Array.from(new Set(documents.map((d) => d.category).filter((c): c is string => !!c))).map(
+                (c) => (
+                  <option key={c} value={c} />
+                ),
+              )}
+            </datalist>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700">Contrato</label>
@@ -441,7 +505,11 @@ export default function BibliotecaPage() {
               </label>
               <select
                 value={updateTargetId}
-                onChange={(e) => setUpdateTargetId(e.target.value)}
+                onChange={(e) => {
+                  setUpdateTargetId(e.target.value);
+                  const doc = updateCandidates.find((d) => String(d.id) === e.target.value);
+                  setUploadCategory(doc?.category ?? "");
+                }}
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
                 required
               >
@@ -511,14 +579,15 @@ export default function BibliotecaPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                          doc.documentType === "APR"
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-sky-100 text-sky-700"
-                        }`}
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${DOCUMENT_TYPE_BADGE[doc.documentType]}`}
                       >
                         {doc.documentType}
                       </span>
+                      {doc.category && (
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          {doc.category}
+                        </span>
+                      )}
                       <a
                         href={`/api/admin/documents/${doc.id}`}
                         target="_blank"

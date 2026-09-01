@@ -28,11 +28,13 @@ function getClient() {
 
 const TOOL_NAME = "salvar_prova";
 
-export type DocumentType = "IT" | "APR";
+export type DocumentType = "IT" | "APR" | "MANUAL";
 
 const DOCUMENT_TYPE_GUIDANCE: Record<DocumentType, string> = {
   IT: "Este documento é uma IT (Instrução de Trabalho): descreve o passo a passo correto de como uma tarefa/processo deve ser executado. Priorize questões sobre a sequência correta das etapas, responsabilidades de quem executa, e o que fazer/não fazer em cada passo — sempre olhando para a função do colaborador que vai responder a prova.",
   APR: "Este documento é uma APR (Análise Preliminar de Risco): identifica perigos, riscos e medidas de controle/EPIs de uma atividade. Priorize questões sobre quais riscos existem em cada etapa da atividade, quais medidas de controle/EPIs são exigidos, e como agir diante de cada risco identificado.",
+  MANUAL:
+    "Este documento é o MANUAL de um equipamento (ex.: guindaste, empilhadeira, plataforma elevatória...). O objetivo é avaliar se o operador realmente conhece o equipamento, então MESCLE dois tipos de questão ao longo da prova: (1) questões TÉCNICAS — características, componentes, capacidades/limites de carga, painéis/comandos, dispositivos de segurança, manutenção básica e o que cada indicador/alerta do equipamento significa; e (2) questões de USO/OPERAÇÃO — procedimentos corretos de partida/parada, checklist pré-operacional, como operar com segurança em cada situação descrita no manual, e o que fazer diante de falhas ou situações de risco do próprio equipamento. Evite concentrar todas as questões técnicas no início e todas as de uso no final — alterne entre os dois tipos ao longo da prova.",
 };
 
 // ITs e APRs quase sempre têm uma coluna/campo "Responsável" em cada linha
@@ -57,7 +59,8 @@ export async function generateExamFromText(
   } = {},
 ): Promise<GeneratedExam> {
   const numQuestions = opts.numQuestions ?? 15;
-  const documentType: DocumentType = opts.documentType === "APR" ? "APR" : "IT";
+  const documentType: DocumentType =
+    opts.documentType === "APR" ? "APR" : opts.documentType === "MANUAL" ? "MANUAL" : "IT";
   const client = getClient();
 
   const message = await client.messages.create({
