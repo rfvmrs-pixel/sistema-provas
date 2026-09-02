@@ -267,7 +267,9 @@
   .vagao-icone:active { transform: scale(0.97); }
   .vagao-icone svg { width: 44px; height: 30px; display: block; }
   .vagao-icone .vagao-num { font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; }
+  .vagao-icone .vagao-prefixo { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; font-weight: 600; color: var(--navy-deep); }
   .vagao-icone .vagao-tons { font-size: 9.5px; color: var(--ink-soft); }
+  .vagao-icone .vagao-tons:empty { display: none; }
   .vagao-icone.aguardando { border-style: dashed; border-color: #CBD5E1; }
   .vagao-icone.em_descarga {
     border-style: solid; border-color: var(--amber); background: rgba(180,83,9,0.06);
@@ -277,6 +279,28 @@
   @keyframes pulsaVagao {
     0%, 100% { box-shadow: 0 0 0 0 rgba(180,83,9,0.18); }
     50% { box-shadow: 0 0 0 4px rgba(180,83,9,0.06); }
+  }
+  /* Vagão finalizado continua na grade (não some) — cor diferente, e o
+     clique agora oferece desfazer em vez de lançar de novo. */
+  .vagao-icone.finalizado { border-style: solid; border-color: var(--green); background: rgba(22,163,74,0.06); }
+  .vagao-icone.finalizado .vagao-desfazer { font-size: 9px; color: var(--green); font-weight: 600; text-decoration: underline; }
+
+  /* ---------- Resumo do prefixo filtrado (acima da grade) ---------- */
+  .resumo-prefixo {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 16px; margin: 0 0 16px;
+  }
+  .resumo-prefixo .item .val { font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; color: var(--navy-deep); }
+  .resumo-prefixo .item .lbl { font-size: 10.5px; color: var(--ink-soft); margin-top: 2px; }
+  .resumo-prefixo .item .val.cor-swatch { display: flex; align-items: center; gap: 6px; }
+  .resumo-prefixo .item .val.cor-swatch .ponto { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line); display: inline-block; }
+
+  /* ---------- Relógio ao vivo (topo) ---------- */
+  .relogio-topo {
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600;
+    color: var(--ink-soft); background: var(--paper); border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 12px; display: inline-block;
   }
 
   /* ---------- Modal (iniciar/finalizar vagão pelo clique no ícone) ---------- */
@@ -350,7 +374,10 @@
     </div>
 
     <div class="card">
-      <span class="turno-tag" id="turnoTag">—</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <span class="turno-tag" id="turnoTag">—</span>
+        <span class="relogio-topo" id="relogioTopo">—</span>
+      </div>
       <div class="kpis">
         <div class="kpi"><div class="val" id="kpiFinalizados">—</div><div class="lbl">Vagões finalizados no turno</div></div>
         <div class="kpi"><div class="val" id="kpiEmAndamento">—</div><div class="lbl">Em descarga agora</div></div>
@@ -420,7 +447,9 @@
         <div class="legenda-grade">
           <span><span class="legenda-ponto aguardando"></span> Aguardando (clique pra iniciar)</span>
           <span><span class="legenda-ponto em_descarga"></span> Em descarga (clique pra finalizar)</span>
+          <span><span class="legenda-ponto finalizado"></span> Finalizado (clique pra desfazer)</span>
         </div>
+        <div class="resumo-prefixo" id="resumoPrefixo" style="display:none;"></div>
       </div>
       <div style="padding:0 22px 20px;">
         <div class="grade-vagoes" id="gradeVagoes"><p class="muted" style="padding:0;">Carregando…</p></div>
@@ -461,52 +490,6 @@
       </details>
     </div>
 
-    <div class="card" id="cardManual" style="display:none;">
-      <details>
-        <summary>Lançamento manual / retroativo</summary>
-        <p class="sub-lead" style="margin-top:10px;">Para quando o horário de início (e opcionalmente o de fim) já é conhecido — esqueceu de bater "Iniciar" na hora, ou está lançando um turno anterior.</p>
-        <div class="form-grid manual">
-          <div>
-            <label for="mNavio">Navio</label>
-            <select id="mNavio"><option value="">Selecione…</option></select>
-          </div>
-          <div>
-            <label for="mTerminal">Terminal</label>
-            <select id="mTerminal">
-              <option value="SARZEDO NOVO">SARZEDO NOVO</option>
-              <option value="MULTILIFT">MULTILIFT</option>
-              <option value="TINAGA">TINAGA</option>
-              <option value="__outro">Outro…</option>
-            </select>
-            <input type="text" id="mTerminalOutro" placeholder="Nome do terminal" style="display:none;margin-top:6px;">
-          </div>
-          <div>
-            <label for="mPrefixo">Prefixo</label>
-            <input type="text" id="mPrefixo" placeholder="ex: FER0102" list="listaPrefixos">
-          </div>
-          <div>
-            <label for="mVagao">Nº do vagão</label>
-            <input type="text" id="mVagao" placeholder="ex: 6127614">
-          </div>
-          <div>
-            <label for="mInicio">Início da descarga</label>
-            <input type="datetime-local" id="mInicio">
-          </div>
-          <div>
-            <label for="mFim">Fim da descarga (opcional)</label>
-            <input type="datetime-local" id="mFim">
-          </div>
-          <div>
-            <label for="mTons">Toneladas (opcional)</label>
-            <input type="text" id="mTons" placeholder="ex: 101.53">
-          </div>
-          <div>
-            <button type="button" class="primario" id="btnManual">Salvar</button>
-          </div>
-        </div>
-      </details>
-    </div>
-
     <div class="card" style="padding:0;">
       <div style="padding:20px 22px 0;">
         <h2>Histórico de vagões</h2>
@@ -529,6 +512,10 @@
         <div>
           <label for="pNavio">Navio (opcional)</label>
           <select id="pNavio"><option value="">—</option></select>
+        </div>
+        <div>
+          <label for="pPrefixo">Prefixo do trem (opcional)</label>
+          <input type="text" id="pPrefixo" placeholder="ex: FER0102" list="listaPrefixos">
         </div>
         <div>
           <label for="pTerminal">Terminal</label>
@@ -573,7 +560,7 @@
       <div class="ledger" style="border:none;">
         <table>
           <thead>
-            <tr><th>Navio</th><th>Terminal</th><th>Ocorrência</th><th>Responsável</th><th>Início</th><th>Tempo parado</th><th id="thAcoesParalisacaoEm" style="display:none;">Ações</th></tr>
+            <tr><th>Prefixo</th><th>Navio</th><th>Terminal</th><th>Ocorrência</th><th>Responsável</th><th>Início</th><th>Tempo parado</th><th id="thAcoesParalisacaoEm" style="display:none;">Ações</th></tr>
           </thead>
           <tbody id="tblParalisacoesEm"><tr><td colspan="7" class="muted">Carregando…</td></tr></tbody>
         </table>
@@ -588,6 +575,10 @@
           <div>
             <label for="pmNavio">Navio (opcional)</label>
             <select id="pmNavio"><option value="">—</option></select>
+          </div>
+          <div>
+            <label for="pmPrefixo">Prefixo do trem (opcional)</label>
+            <input type="text" id="pmPrefixo" placeholder="ex: FER0102" list="listaPrefixos">
           </div>
           <div>
             <label for="pmTerminal">Terminal</label>
@@ -642,7 +633,7 @@
       <div class="ledger" style="border:none;">
         <table>
           <thead>
-            <tr><th>Navio</th><th>Terminal</th><th>Ocorrência</th><th>Responsável</th><th>Início</th><th>Término</th><th>Duração</th><th>Status</th><th id="thAcoesParalisacaoHist" style="display:none;">Ações</th></tr>
+            <tr><th>Prefixo</th><th>Navio</th><th>Terminal</th><th>Ocorrência</th><th>Responsável</th><th>Início</th><th>Término</th><th>Duração</th><th>Status</th><th id="thAcoesParalisacaoHist" style="display:none;">Ações</th></tr>
           </thead>
           <tbody id="tblParalisacoesHistorico"><tr><td colspan="9" class="muted">Carregando…</td></tr></tbody>
         </table>
@@ -839,7 +830,6 @@
     const opcoes = '<option value="">Selecione…</option>' + NAVIOS.map(n => `<option value="${n.id}">${n.nome} (${n.ano})</option>`).join('');
     const opcoesOpcional = '<option value="">—</option>' + NAVIOS.map(n => `<option value="${n.id}">${n.nome} (${n.ano})</option>`).join('');
     document.getElementById('iNavio').innerHTML = opcoes;
-    document.getElementById('mNavio').innerHTML = opcoes;
     document.getElementById('pNavio').innerHTML = opcoesOpcional;
     document.getElementById('pmNavio').innerHTML = opcoesOpcional;
     document.getElementById('fNavio').innerHTML = '<option value="">Todos</option>' + NAVIOS.map(n => `<option value="${n.id}">${n.nome} (${n.ano})</option>`).join('');
@@ -853,7 +843,6 @@
     });
   }
   gerenciarTerminalOutro('iTerminal', 'iTerminalOutro');
-  gerenciarTerminalOutro('mTerminal', 'mTerminalOutro');
   gerenciarTerminalOutro('pTerminal', 'pTerminalOutro');
   gerenciarTerminalOutro('pmTerminal', 'pmTerminalOutro');
   function valorTerminal(selectId, outroId) {
@@ -897,7 +886,6 @@
     const podeEditar = PERMISSAO === 'editar';
     document.getElementById('cardIniciar').style.display = podeLancar ? 'block' : 'none';
     document.getElementById('cardImportar').style.display = podeLancar ? 'block' : 'none';
-    document.getElementById('cardManual').style.display = podeLancar ? 'block' : 'none';
     document.getElementById('cardParalisacaoIniciar').style.display = podeLancar ? 'block' : 'none';
     document.getElementById('cardParalisacaoManual').style.display = podeLancar ? 'block' : 'none';
     document.getElementById('cardCarretas').style.display = podeLancar ? 'block' : 'none';
@@ -908,7 +896,7 @@
 
     document.getElementById('turnoTag').textContent = `Turno atual: ${DADOS.turnoAtual.turno} — ${DADOS.turnoAtual.data.split('-').reverse().join('/')}`;
     document.getElementById('kpiFinalizados').textContent = DADOS.turnoStats.finalizados;
-    document.getElementById('kpiEmAndamento').textContent = DADOS.emDescarga.length;
+    document.getElementById('kpiEmAndamento').textContent = DADOS.emDescargaTotal != null ? DADOS.emDescargaTotal : DADOS.emDescarga.length;
     document.getElementById('kpiMedia').textContent = formatarDuracaoSegundos(DADOS.turnoStats.mediaSegundos);
     document.getElementById('kpiTons').textContent = DADOS.turnoStats.totalTons != null
       ? DADOS.turnoStats.totalTons.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
@@ -918,8 +906,10 @@
     document.getElementById('listaPrefixos').innerHTML = (DADOS.prefixosConhecidos || []).map(p => `<option value="${p}">`).join('');
 
     document.getElementById('gradeLead').textContent = DADOS.aguardandoPrecisaNavio
-      ? 'Selecione um Navio no filtro acima pra ver os vagões aguardando descarga da planilha. Os que já estão em descarga aparecem sempre.'
-      : `${(DADOS.aguardando || []).length} vagão(ões) aguardando + ${(DADOS.emDescarga || []).length} em descarga agora.`;
+      ? 'Selecione um Navio no filtro acima pra ver os vagões dele (aguardando, em descarga e finalizados).'
+      : `${(DADOS.aguardando || []).length} vagão(ões) aguardando + ${(DADOS.emDescarga || []).length} em descarga agora + ${(DADOS.finalizadosGrade || []).length} finalizado(s).`;
+
+    renderResumoPrefixo();
 
     // Turno/data do formulário de Carretas só é preenchido automaticamente
     // na primeira carga — depois disso é o usuário quem decide o que
@@ -944,6 +934,25 @@
     renderCarretas(podeEditar);
   }
 
+  // Resumo do prefixo filtrado (Navio + Prefixo), acima da grade — aparece
+  // tanto pra um trem ainda em andamento quanto pra um já totalmente
+  // finalizado (o back-end agrega todos os status, sem olhar a data).
+  function renderResumoPrefixo() {
+    const el = document.getElementById('resumoPrefixo');
+    const r = DADOS.resumoPrefixo;
+    if (!r) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    const item = (val, lbl) => `<div class="item"><div class="val">${val}</div><div class="lbl">${lbl}</div></div>`;
+    el.innerHTML =
+      item(r.prefixo || '—', 'Prefixo') +
+      item(r.cor || '—', 'Cor do lote') +
+      item(r.totalVagoes, 'Total de vagões') +
+      item(r.totalToneladas != null ? r.totalToneladas.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' t' : '—', 'Tonelagem total') +
+      item(formatarHora(r.inicioDescarga), 'Início da descarga') +
+      item(formatarHora(r.fimDescarga), 'Fim da descarga') +
+      item(`${r.aguardando} / ${r.emDescarga} / ${r.finalizados}`, 'Aguardando / Em descarga / Finalizados');
+    el.style.display = 'grid';
+  }
+
   // Ícone simples de vagão-tremonha (gôndola), em SVG inline — cor muda
   // por status via a classe do wrapper (.vagao-icone.aguardando/em_descarga).
   function svgVagao() {
@@ -960,22 +969,33 @@
     const grade = document.getElementById('gradeVagoes');
     const aguardando = DADOS.aguardando || [];
     const emDescarga = DADOS.emDescarga || [];
-    if (!aguardando.length && !emDescarga.length) {
-      grade.innerHTML = `<p class="muted" style="padding:0;">Nenhum vagão aguardando ou em descarga no momento.</p>`;
+    // Finalizado NUNCA some da grade — fica com outra cor e vira "desfazer"
+    // em vez de sumir, pra não parecer que o lançamento se perdeu.
+    const finalizados = DADOS.finalizadosGrade || [];
+    if (!aguardando.length && !emDescarga.length && !finalizados.length) {
+      grade.innerHTML = DADOS.aguardandoPrecisaNavio
+        ? `<p class="muted" style="padding:0;">Selecione um Navio no filtro acima pra ver os vagões dele.</p>`
+        : `<p class="muted" style="padding:0;">Nenhum vagão aguardando, em descarga ou finalizado no momento.</p>`;
       return;
     }
+    const titulo = (status) => status === 'aguardando' ? 'Clique para lançar o início da descarga'
+      : status === 'em_descarga' ? 'Clique para lançar o fim da descarga'
+      : 'Clique para desfazer a finalização';
     const icone = (v, status) => `
       <button type="button" class="vagao-icone ${status}" data-id="${v.id}" data-status="${status}"
         data-vagao="${v.vagao}" data-inicio="${v.inicioDescarga || ''}" ${podeLancar ? '' : 'disabled'}
-        title="${status === 'aguardando' ? 'Clique para lançar o início da descarga' : 'Clique para lançar o fim da descarga'}">
+        title="${titulo(status)}">
         ${svgVagao()}
         <span class="vagao-num">${v.vagao}</span>
-        <span class="vagao-tons">${v.tons != null ? v.tons.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' t' : (v.prefixo || '—')}</span>
+        <span class="vagao-prefixo">${v.prefixo || '—'}</span>
+        <span class="vagao-tons">${v.tons != null ? v.tons.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' t' : ''}</span>
         ${status === 'em_descarga' ? `<span class="vagao-relogio col-relogio-grade">—</span>` : ''}
+        ${status === 'finalizado' ? `<span class="vagao-desfazer">desfazer</span>` : ''}
       </button>`;
     grade.innerHTML =
       emDescarga.map(v => icone(v, 'em_descarga')).join('') +
-      aguardando.map(v => icone(v, 'aguardando')).join('');
+      aguardando.map(v => icone(v, 'aguardando')).join('') +
+      finalizados.map(v => icone(v, 'finalizado')).join('');
     atualizarRelogios();
   }
 
@@ -993,8 +1013,18 @@
       const seg = (Date.now() - inicio.getTime()) / 1000;
       tr.querySelector('.col-relogio').textContent = formatarDuracaoSegundos(seg);
     });
+    // Relógio ao vivo no topo — sempre horário de Brasília, independente do
+    // fuso do navegador de quem estiver acessando.
+    const relEl = document.getElementById('relogioTopo');
+    if (relEl) {
+      relEl.textContent = new Date().toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+    }
   }
   setInterval(atualizarRelogios, 1000);
+  atualizarRelogios();
 
   // ---------- Modal: clique no ícone do vagão (iniciar/finalizar) ----------
   let MODAL_VAGAO_ID = null;
@@ -1029,9 +1059,24 @@
     MODAL_VAGAO_ACAO = null;
   }
 
-  document.getElementById('gradeVagoes').addEventListener('click', (e) => {
+  document.getElementById('gradeVagoes').addEventListener('click', async (e) => {
     const el = e.target.closest('.vagao-icone');
     if (!el || el.disabled) return;
+    if (el.dataset.status === 'finalizado') {
+      if (!confirm(`Desfazer a finalização do vagão ${el.dataset.vagao}? Ele volta para "em descarga".`)) return;
+      el.disabled = true;
+      try {
+        const resp = await fetch(`/api/gusa/vagoes/${encodeURIComponent(el.dataset.id)}/desfazer`, { method: 'PUT' });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.erro || 'Erro ao desfazer.');
+        mostrarMsg(`Vagão ${el.dataset.vagao}: finalização desfeita.`, 'ok');
+        await carregarDados();
+      } catch (err) {
+        mostrarMsg(err.message || 'Erro ao desfazer.', 'erro');
+        el.disabled = false;
+      }
+      return;
+    }
     abrirModalVagao(el.dataset.id, el.dataset.vagao, el.dataset.status === 'aguardando' ? 'iniciar' : 'finalizar');
   });
   document.getElementById('modalVagaoCancelar').addEventListener('click', fecharModalVagao);
@@ -1106,11 +1151,12 @@
     const tbl = document.getElementById('tblParalisacoesEm');
     const lista = DADOS.paralisacoesAbertas || [];
     if (!lista.length) {
-      tbl.innerHTML = `<tr><td colspan="${podeLancar ? 7 : 6}" class="muted">Nenhuma parada em andamento.</td></tr>`;
+      tbl.innerHTML = `<tr><td colspan="${podeLancar ? 8 : 7}" class="muted">Nenhuma parada em andamento.</td></tr>`;
       return;
     }
     tbl.innerHTML = lista.map(p => `
       <tr data-paralisacao-em-id="${p.id}" data-inicio="${p.inicio}">
+        <td>${p.prefixo || '—'}</td>
         <td>${p.navioNome || '—'}</td>
         <td>${p.terminal || '—'}</td>
         <td><strong>${p.ocorrencia}</strong></td>
@@ -1131,7 +1177,7 @@
     const tbl = document.getElementById('tblParalisacoesHistorico');
     const lista = DADOS.paralisacoesHistorico || [];
     if (!lista.length) {
-      tbl.innerHTML = `<tr><td colspan="${podeEditar ? 9 : 8}" class="muted">Nenhuma parada lançada ainda.</td></tr>`;
+      tbl.innerHTML = `<tr><td colspan="${podeEditar ? 10 : 9}" class="muted">Nenhuma parada lançada ainda.</td></tr>`;
       return;
     }
     tbl.innerHTML = lista.map(p => {
@@ -1140,6 +1186,7 @@
         : '—';
       return `
       <tr data-paralisacao-hist-id="${p.id}">
+        <td>${p.prefixo || '—'}</td>
         <td>${p.navioNome || '—'}</td>
         <td>${p.terminal || '—'}</td>
         <td><strong>${p.ocorrencia}</strong></td>
@@ -1215,42 +1262,6 @@
     }
   });
 
-  document.getElementById('btnManual').addEventListener('click', async () => {
-    const navio_id = document.getElementById('mNavio').value;
-    const terminal = valorTerminal('mTerminal', 'mTerminalOutro');
-    const prefixo = document.getElementById('mPrefixo').value.trim();
-    const vagao = document.getElementById('mVagao').value.trim();
-    const inicio_descarga = document.getElementById('mInicio').value;
-    const fim_descarga = document.getElementById('mFim').value;
-    const tons = document.getElementById('mTons').value.trim();
-
-    if (!navio_id) { mostrarMsg('Selecione o navio.', 'erro'); return; }
-    if (!vagao) { mostrarMsg('Informe o número do vagão.', 'erro'); return; }
-    if (!inicio_descarga) { mostrarMsg('Informe o início da descarga.', 'erro'); return; }
-
-    const btn = document.getElementById('btnManual');
-    btn.disabled = true;
-    try {
-      const resp = await fetch('/api/gusa/vagoes/manual', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ navio_id, terminal, prefixo, vagao, inicio_descarga, fim_descarga: fim_descarga || null, tons: tons || null })
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) throw new Error(data.erro || 'Erro ao salvar.');
-      document.getElementById('mPrefixo').value = '';
-      document.getElementById('mVagao').value = '';
-      document.getElementById('mInicio').value = '';
-      document.getElementById('mFim').value = '';
-      document.getElementById('mTons').value = '';
-      mostrarMsg(`Vagão ${vagao}: lançamento manual salvo.`, 'ok');
-      await carregarDados();
-    } catch (err) {
-      mostrarMsg(err.message || 'Erro ao salvar.', 'erro');
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
   document.getElementById('tblHistorico').addEventListener('click', async (e) => {
     const btnExcluir = e.target.closest('.btn-excluir-hist');
     if (btnExcluir) {
@@ -1266,6 +1277,7 @@
 
   document.getElementById('btnParalisacaoIniciar').addEventListener('click', async () => {
     const navio_id = document.getElementById('pNavio').value;
+    const prefixo = document.getElementById('pPrefixo').value.trim();
     const terminal = valorTerminal('pTerminal', 'pTerminalOutro');
     const codigo = document.getElementById('pOcorrencia').value;
     const responsavel = document.getElementById('pResponsavel').value;
@@ -1278,10 +1290,11 @@
     try {
       const resp = await fetch('/api/gusa/paralisacoes/iniciar', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ navio_id: navio_id || null, terminal, tipo: c.codigo, ocorrencia: c.descricao, responsavel: responsavel || null, observacao: observacao || null })
+        body: JSON.stringify({ navio_id: navio_id || null, prefixo: prefixo || null, terminal, tipo: c.codigo, ocorrencia: c.descricao, responsavel: responsavel || null, observacao: observacao || null })
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.erro || 'Erro ao iniciar parada.');
+      document.getElementById('pPrefixo').value = '';
       document.getElementById('pOcorrencia').value = '';
       document.getElementById('pObservacao').value = '';
       mostrarMsg('Parada registrada.', 'ok');
@@ -1312,6 +1325,7 @@
 
   document.getElementById('btnParalisacaoManual').addEventListener('click', async () => {
     const navio_id = document.getElementById('pmNavio').value;
+    const prefixo = document.getElementById('pmPrefixo').value.trim();
     const terminal = valorTerminal('pmTerminal', 'pmTerminalOutro');
     const codigo = document.getElementById('pmOcorrencia').value;
     const responsavel = document.getElementById('pmResponsavel').value;
@@ -1327,10 +1341,11 @@
     try {
       const resp = await fetch('/api/gusa/paralisacoes/manual', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ navio_id: navio_id || null, terminal, tipo: c.codigo, ocorrencia: c.descricao, responsavel: responsavel || null, observacao: observacao || null, inicio, termino: termino || null })
+        body: JSON.stringify({ navio_id: navio_id || null, prefixo: prefixo || null, terminal, tipo: c.codigo, ocorrencia: c.descricao, responsavel: responsavel || null, observacao: observacao || null, inicio, termino: termino || null })
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.erro || 'Erro ao salvar parada.');
+      document.getElementById('pmPrefixo').value = '';
       document.getElementById('pmOcorrencia').value = '';
       document.getElementById('pmObservacao').value = '';
       document.getElementById('pmInicio').value = '';
