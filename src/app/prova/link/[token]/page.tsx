@@ -11,7 +11,7 @@ type LinkInfo = {
   examTitle: string;
   sectorName: string;
   roleName: string;
-  kind: "geral" | "direcionada";
+  kind: "geral" | "direcionada" | "curso" | "simulado";
   valid: boolean;
 };
 
@@ -94,7 +94,11 @@ export default function ExamLinkPage({ params }: { params: Promise<{ token: stri
             <p className="mt-1 text-sm text-slate-500">
               {info.kind === "direcionada"
                 ? "Essa prova é direcionada a você. Confirme seus dados pra começar."
-                : "Preencha seus dados pra começar a prova."}
+                : info.kind === "curso"
+                  ? "Prova de curso/formação. Preencha seus dados pra começar."
+                  : info.kind === "simulado"
+                    ? "Simulado oficial aplicado pelo gestor. Preencha seus dados pra começar."
+                    : "Preencha seus dados pra começar a prova."}
             </p>
 
             <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">

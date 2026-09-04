@@ -5,6 +5,10 @@ import { exams, examLinks, employees } from "@/db/schema";
 import { requireEditor, canAccessSector } from "@/lib/requireAdmin";
 import { hashPassword } from "@/lib/password";
 import { generateLinkToken } from "@/lib/token";
+import { isExamLinkOpen } from "@/lib/examLinkPeriod";
+
+const LINK_KINDS = ["geral", "direcionada", "curso", "simulado"] as const;
+type LinkKind = (typeof LINK_KINDS)[number];
 
 // Lista os links de aplicação (Prova Geral/Direcionada) já gerados pra essa
 // prova, com o nome do funcionário-alvo quando for direcionado.
@@ -31,13 +35,23 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       createdAt: examLinks.createdAt,
       targetEmployeeId: examLinks.targetEmployeeId,
       targetEmployeeName: employees.name,
+      periodStart: examLinks.periodStart,
+      periodEnd: examLinks.periodEnd,
+      authorizedBy: examLinks.authorizedBy,
+      authorizationComment: examLinks.authorizationComment,
+      authorizedAt: examLinks.authorizedAt,
     })
     .from(examLinks)
     .leftJoin(employees, eq(examLinks.targetEmployeeId, employees.id))
     .where(eq(examLinks.examId, examId))
     .orderBy(examLinks.createdAt);
 
-  return NextResponse.json({ links: list });
+  const withStatus = list.map((link) => ({
+    ...link,
+    open: isExamLinkOpen(link),
+  }));
+
+  return NextResponse.json({ links: withStatus });
 }
 
 // Cria um novo link de aplicação:
@@ -46,6 +60,11 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 // - kind "direcionada": travado num funcionário específico — informe
 //   name+matricula (acha um já existente com essa matrícula nesse Setor, ou
 //   cria na hora).
+// - kind "curso" / "simulado": mesmo autocadastro livre do "geral", só
+//   muda o rótulo/relatório (curso de formação vs. simulado específico
+//   aplicado oficialmente, ex.: reciclagem).
+// periodStart/periodEnd (opcionais): fora desse intervalo o link fecha
+// sozinho pra apuração de notas — ver isExamLinkOpen/lib/examLinkPeriod.
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const guard = await requireEditor();
   if (!guard.ok) return guard.response;
@@ -72,8 +91,19 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
 
   const body = await request.json().catch(() => null);
-  const kind = body?.kind === "direcionada" ? "direcionada" : "geral";
+  const kind: LinkKind = LINK_KINDS.includes(body?.kind) ? body.kind : "geral";
   const label = body?.label?.toString().trim() || null;
+
+  // Período de aplicação (opcional) — "YYYY-MM-DD". Fora desse intervalo o
+  // link fecha sozinho (ver isExamLinkOpen); vazio = sem restrição.
+  const periodStart = body?.periodStart?.toString().trim() || null;
+  const periodEnd = body?.periodEnd?.toString().trim() || null;
+  if (periodStart && periodEnd && periodStart > periodEnd) {
+    return NextResponse.json(
+      { error: "A data de início não pode ser depois da data de fim." },
+      { status: 400 },
+    );
+  }
 
   let targetEmployeeId: number | null = null;
 
@@ -126,8 +156,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
   const [link] = await db
     .insert(examLinks)
-    .values({ examId, token, kind, targetEmployeeId, label })
+    .values({ examId, token, kind, targetEmployeeId, label, periodStart, periodEnd })
     .returning();
 
-  return NextResponse.json({ link }, { status: 201 });
+  return NextResponse.json({ link: { ...link, open: isExamLinkOpen(link) } }, { status: 201 });
 }

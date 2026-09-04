@@ -34,6 +34,119 @@ export type AttemptPdfData = {
   questions: AttemptPdfQuestion[];
 };
 
+export type BlankExamPdfQuestion = {
+  order: number;
+  text: string;
+  options: { key: string; text: string }[];
+};
+
+export type BlankExamPdfData = {
+  examTitle: string;
+  sectorName: string;
+  roleName: string;
+  documentType: "IT" | "APR" | "MANUAL";
+  questions: BlankExamPdfQuestion[];
+};
+
+// Gera a prova em branco (sem gabarito) pra ser impressa e respondida à mão
+// — mesmo cabeçalho/identidade visual do comprovante de tentativa, mas com
+// campos vazios pra Nome/Matrícula/Data e caixinhas (☐) nas alternativas em
+// vez de indicar a resposta certa.
+export async function generateBlankExamPdf(data: BlankExamPdfData): Promise<Buffer> {
+  const doc = new PDFDocument({ size: "A4", margin: 50, bufferPages: true });
+  const chunks: Buffer[] = [];
+  doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+  const done = new Promise<Buffer>((resolve) => {
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+  });
+
+  const headerTop = doc.y;
+  const logoSize = 42;
+  const textX = 50 + logoSize + 14;
+  const textWidth = 495 - logoSize - 14;
+
+  try {
+    doc.image(TRIUNFO_LOGO_PATH, 50, headerTop, { width: logoSize, height: logoSize });
+  } catch {
+    // Sem logo nesse ambiente, segue só com o texto.
+  }
+
+  const documentTypeLabel =
+    data.documentType === "APR"
+      ? "APR (Análise Preliminar de Risco)"
+      : data.documentType === "MANUAL"
+        ? "MANUAL (manual de equipamento)"
+        : "IT (Instrução de Trabalho)";
+
+  doc
+    .fontSize(9)
+    .font("Helvetica-Bold")
+    .fillColor("#94a3b8")
+    .text("TRIUNFO LOGÍSTICA — PROVA EM BRANCO", textX, headerTop, { width: textWidth });
+  doc.fontSize(14).font("Helvetica-Bold").fillColor("#0f172a").text(data.examTitle, textX, doc.y, { width: textWidth });
+  doc.fontSize(9).font("Helvetica").fillColor("#64748b").text(documentTypeLabel, textX, doc.y, { width: textWidth });
+
+  doc.y = Math.max(doc.y, headerTop + logoSize);
+  doc.moveDown(1);
+
+  // Campos em branco pro colaborador preencher à mão.
+  const fields: [string, string][] = [
+    ["Setor", data.sectorName],
+    ["Função", data.roleName],
+    ["Nome do Colaborador", "_______________________________________________"],
+    ["Matrícula", "_______________________"],
+    ["Data da Prova", "____ / ____ / ________"],
+  ];
+  const labelWidth = 150;
+  for (const [label, value] of fields) {
+    const rowY = doc.y;
+    doc.fontSize(10).font("Helvetica-Bold").fillColor("#334155").text(`${label}:`, 50, rowY, { width: labelWidth });
+    doc.fontSize(10).font("Helvetica").fillColor("#0f172a").text(value, 50 + labelWidth, rowY, {
+      width: 495 - labelWidth,
+    });
+    doc.moveDown(0.4);
+  }
+  doc
+    .moveTo(50, doc.y + 4)
+    .lineTo(545, doc.y + 4)
+    .strokeColor("#e2e8f0")
+    .stroke();
+  doc.moveDown(1);
+
+  doc.fontSize(11).font("Helvetica-Bold").fillColor("#0f172a").text("Questões");
+  doc
+    .fontSize(8.5)
+    .font("Helvetica-Oblique")
+    .fillColor("#94a3b8")
+    .text("Marque com um X a alternativa escolhida.");
+  doc.moveDown(0.5);
+
+  data.questions
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .forEach((q, idx) => {
+      doc
+        .fontSize(10)
+        .font("Helvetica-Bold")
+        .fillColor("#0f172a")
+        .text(`${idx + 1}. ${q.text}`, { width: 495 });
+      doc.moveDown(0.2);
+
+      q.options.forEach((opt) => {
+        doc
+          .fontSize(9.5)
+          .font("Helvetica")
+          .fillColor("#334155")
+          .text(`☐  ${opt.key}) ${opt.text}`, { width: 490, indent: 10 });
+      });
+
+      doc.moveDown(0.7);
+    });
+
+  doc.end();
+  return done;
+}
+
 function formatDate(d: Date | null) {
   if (!d) return "—";
   return new Date(d).toLocaleString("pt-BR", {

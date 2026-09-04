@@ -266,12 +266,27 @@ export const examLinks = pgTable(
       .notNull()
       .references(() => exams.id, { onDelete: "cascade" }),
     token: varchar("token", { length: 40 }).notNull().unique(),
+    // "geral" | "direcionada" | "curso" | "simulado" — escolhido já na tela
+    // inicial de "Gerar prova" (ver /admin/provas), sem precisar de uma
+    // segunda tela de confirmação.
     kind: varchar("kind", { length: 20 }).default("geral").notNull(),
     targetEmployeeId: integer("target_employee_id").references(() => employees.id, {
       onDelete: "set null",
     }),
     label: varchar("label", { length: 150 }),
     active: boolean("active").default(true).notNull(),
+    // Período de aplicação (ex.: 01/09 a 30/09) — fora desse intervalo o
+    // link fecha sozinho pra apuração de notas (ver isExamLinkOpen em
+    // lib/examLinkPeriod.ts). Null = sem restrição de período.
+    periodStart: date("period_start"),
+    periodEnd: date("period_end"),
+    // Preenchido quando um gestor autoriza responder fora do período —
+    // reabre o link mesmo com a data corrente fora de [periodStart,
+    // periodEnd]. O comentário é obrigatório (ver rota PATCH
+    // /api/admin/exam-links/[id]).
+    authorizedBy: varchar("authorized_by", { length: 150 }),
+    authorizationComment: varchar("authorization_comment", { length: 500 }),
+    authorizedAt: timestamp("authorized_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("exam_links_exam_idx").on(t.examId)],

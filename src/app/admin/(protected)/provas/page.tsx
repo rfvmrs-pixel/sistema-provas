@@ -40,6 +40,20 @@ type Exam = {
   attemptCount: number;
 };
 
+type ApplicationKind = "geral" | "direcionada" | "curso" | "simulado";
+const APPLICATION_KIND_LABEL: Record<ApplicationKind, string> = {
+  geral: "Prova Geral",
+  direcionada: "Prova Direcionada",
+  curso: "Prova de Curso",
+  simulado: "Simulado específico",
+};
+const APPLICATION_KIND_HELP: Record<ApplicationKind, string> = {
+  geral: "Qualquer colaborador do Contrato/Função pode responder pelo link, autocadastrando-se.",
+  direcionada: "Só a pessoa que você indicar (nome + matrícula) consegue responder pelo link.",
+  curso: "Mesmo autocadastro livre da Prova Geral — usado pra provas de curso/formação.",
+  simulado: "Mesmo autocadastro livre da Prova Geral — usado pra um simulado oficial específico.",
+};
+
 const QUESTION_COUNT_OPTIONS = [10, 15];
 
 export default function ProvasPage() {
@@ -57,6 +71,18 @@ export default function ProvasPage() {
   const [numQuestions, setNumQuestions] = useState(15);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+
+  // Tipo de aplicação + período — já escolhidos aqui na tela inicial, sem
+  // precisar ir pra uma segunda tela (ver /admin/provas/[id] > Links de
+  // aplicação, que continua existindo pra gerar links extras depois).
+  const [applicationKind, setApplicationKind] = useState<ApplicationKind>("geral");
+  const [linkLabel, setLinkLabel] = useState("");
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+  const [direcionadaName, setDirecionadaName] = useState("");
+  const [direcionadaMatricula, setDirecionadaMatricula] = useState("");
+  const [generatedLink, setGeneratedLink] = useState<{ examTitle: string; token: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Filtro por Contrato (PDFs disponíveis pra gerar + tabela de provas),
   // útil quando há vários Contratos cadastrados. "" = Todos.
@@ -90,7 +116,16 @@ export default function ProvasPage() {
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
     if (!documentId || !roleId) return;
+    if (applicationKind === "direcionada" && (!direcionadaName.trim() || !direcionadaMatricula.trim())) {
+      setGenerateError("Informe nome e matrícula do colaborador pra uma Prova Direcionada.");
+      return;
+    }
+    if (periodStart && periodEnd && periodStart > periodEnd) {
+      setGenerateError("A data de início não pode ser depois da data de fim.");
+      return;
+    }
     setGenerateError(null);
+    setGeneratedLink(null);
     setGenerating(true);
     try {
       const res = await fetch("/api/admin/exams", {
@@ -103,12 +138,51 @@ export default function ProvasPage() {
         setGenerateError(data.error || "Falha ao gerar a prova.");
         return;
       }
+
+      // Já cria o link de aplicação (Geral/Direcionada/Curso/Simulado) com o
+      // período escolhido, na mesma tela — evita ter que ir na prova gerada
+      // pra criar o link depois.
+      const linkRes = await fetch(`/api/admin/exams/${data.exam.id}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: applicationKind,
+          label: linkLabel || undefined,
+          periodStart: periodStart || undefined,
+          periodEnd: periodEnd || undefined,
+          name: applicationKind === "direcionada" ? direcionadaName.trim() : undefined,
+          matricula: applicationKind === "direcionada" ? direcionadaMatricula.trim() : undefined,
+        }),
+      });
+      const linkData = await linkRes.json();
+      if (!linkRes.ok) {
+        setGenerateError(
+          `Prova criada, mas houve um erro ao gerar o link de aplicação: ${linkData.error || "erro desconhecido"}. Você pode gerar o link manualmente na página da prova.`,
+        );
+      } else {
+        setGeneratedLink({ examTitle: data.exam.title, token: linkData.link.token });
+      }
+
       setDocumentId("");
       setRoleId("");
+      setLinkLabel("");
+      setPeriodStart("");
+      setPeriodEnd("");
+      setDirecionadaName("");
+      setDirecionadaMatricula("");
       load();
     } finally {
       setGenerating(false);
     }
+  }
+
+  function copyGeneratedLink() {
+    if (!generatedLink) return;
+    const url = `${window.location.origin}/prova/link/${generatedLink.token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   async function toggleActive(exam: Exam) {
@@ -267,6 +341,109 @@ export default function ProvasPage() {
             {generateError && <p className="mt-2 text-sm text-red-600">{generateError}</p>}
           </div>
         </form>
+
+        <div className="mt-5 border-t border-slate-100 pt-5">
+          <h3 className="text-xs font-semibold uppercase text-slate-500">
+            Como essa prova vai ser aplicada
+          </h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Escolha aqui o tipo de aplicação e o período — o link já sai pronto assim que a prova
+            for gerada, sem precisar confirmar isso numa segunda tela.
+          </p>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(Object.keys(APPLICATION_KIND_LABEL) as ApplicationKind[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setApplicationKind(k)}
+                className={`rounded-md border px-3 py-2 text-left text-xs font-medium transition ${
+                  applicationKind === k
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                }`}
+              >
+                {APPLICATION_KIND_LABEL[k]}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-400">{APPLICATION_KIND_HELP[applicationKind]}</p>
+
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {applicationKind === "direcionada" && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">Nome do colaborador</label>
+                  <input
+                    value={direcionadaName}
+                    onChange={(e) => setDirecionadaName(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">Matrícula</label>
+                  <input
+                    value={direcionadaMatricula}
+                    onChange={(e) => setDirecionadaMatricula(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                  />
+                </div>
+              </>
+            )}
+            <div className={applicationKind === "direcionada" ? "" : "sm:col-span-2"}>
+              <label className="block text-xs font-medium text-slate-700">Rótulo (opcional)</label>
+              <input
+                value={linkLabel}
+                onChange={(e) => setLinkLabel(e.target.value)}
+                placeholder="Ex: Treinamento mensal, Turma de setembro..."
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Aplicar a partir de</label>
+              <input
+                type="date"
+                value={periodStart}
+                onChange={(e) => setPeriodStart(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700">Até (fecha após essa data)</label>
+              <input
+                type="date"
+                value={periodEnd}
+                onChange={(e) => setPeriodEnd(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              />
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            Deixe em branco pra não ter data limite. Depois do período, a prova fecha sozinha
+            (fica em apuração de notas) e só reabre se um gestor autorizar, com comentário, na
+            página da prova.
+          </p>
+        </div>
+
+        {generatedLink && (
+          <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-sm font-medium text-emerald-900">
+              Prova &quot;{generatedLink.examTitle}&quot; criada e link pronto:
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <code className="rounded-md bg-white px-2 py-1 text-xs text-slate-700">
+                /prova/link/{generatedLink.token}
+              </code>
+              <button
+                type="button"
+                onClick={copyGeneratedLink}
+                className="rounded-md border border-emerald-300 bg-white px-3 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+              >
+                {copied ? "Copiado!" : "Copiar link"}
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
@@ -339,6 +516,14 @@ export default function ProvasPage() {
                     </button>
                   </td>
                   <td className="px-5 py-3 text-right text-xs">
+                    <a
+                      href={`/api/admin/exams/${exam.id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mr-3 text-slate-500 hover:underline"
+                    >
+                      PDF em branco
+                    </a>
                     {!isReadOnly && (
                       <button onClick={() => handleDelete(exam)} className="text-red-600 hover:underline">
                         excluir

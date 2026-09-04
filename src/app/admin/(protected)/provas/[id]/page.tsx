@@ -47,11 +47,29 @@ type LibraryDocument = { id: number; fileName: string; sectorId: number; sectorN
 type ExamLink = {
   id: number;
   token: string;
-  kind: "geral" | "direcionada";
+  kind: "geral" | "direcionada" | "curso" | "simulado";
   label: string | null;
   active: boolean;
   targetEmployeeId: number | null;
   targetEmployeeName: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  authorizedBy: string | null;
+  authorizationComment: string | null;
+  authorizedAt: string | null;
+  open: boolean;
+};
+const LINK_KIND_LABEL: Record<ExamLink["kind"], string> = {
+  geral: "Geral",
+  direcionada: "Direcionada",
+  curso: "Curso",
+  simulado: "Simulado",
+};
+const LINK_KIND_BADGE: Record<ExamLink["kind"], string> = {
+  geral: "bg-sky-100 text-sky-700",
+  direcionada: "bg-indigo-100 text-indigo-700",
+  curso: "bg-violet-100 text-violet-700",
+  simulado: "bg-amber-100 text-amber-700",
 };
 const QUESTION_COUNT_OPTIONS = [10, 15];
 
@@ -84,13 +102,20 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
   // precisar ter conta/senha criada antes.
   const [examLinks, setExamLinks] = useState<ExamLink[]>([]);
   const [geralLabel, setGeralLabel] = useState("");
+  const [geralPeriodStart, setGeralPeriodStart] = useState("");
+  const [geralPeriodEnd, setGeralPeriodEnd] = useState("");
   const [creatingGeralLink, setCreatingGeralLink] = useState(false);
   const [direcionadaName, setDirecionadaName] = useState("");
   const [direcionadaMatricula, setDirecionadaMatricula] = useState("");
   const [direcionadaLabel, setDirecionadaLabel] = useState("");
+  const [direcionadaPeriodStart, setDirecionadaPeriodStart] = useState("");
+  const [direcionadaPeriodEnd, setDirecionadaPeriodEnd] = useState("");
   const [creatingDirecionadaLink, setCreatingDirecionadaLink] = useState(false);
   const [linksError, setLinksError] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [authorizingLinkId, setAuthorizingLinkId] = useState<number | null>(null);
+  const [authorizeComment, setAuthorizeComment] = useState("");
+  const [authorizing, setAuthorizing] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -205,7 +230,12 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
       const res = await fetch(`/api/admin/exams/${id}/links`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "geral", label: geralLabel || undefined }),
+        body: JSON.stringify({
+          kind: "geral",
+          label: geralLabel || undefined,
+          periodStart: geralPeriodStart || undefined,
+          periodEnd: geralPeriodEnd || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -213,6 +243,8 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
         return;
       }
       setGeralLabel("");
+      setGeralPeriodStart("");
+      setGeralPeriodEnd("");
       load();
     } finally {
       setCreatingGeralLink(false);
@@ -233,6 +265,8 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
           name: direcionadaName,
           matricula: direcionadaMatricula,
           label: direcionadaLabel || undefined,
+          periodStart: direcionadaPeriodStart || undefined,
+          periodEnd: direcionadaPeriodEnd || undefined,
         }),
       });
       const data = await res.json();
@@ -243,6 +277,8 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
       setDirecionadaName("");
       setDirecionadaMatricula("");
       setDirecionadaLabel("");
+      setDirecionadaPeriodStart("");
+      setDirecionadaPeriodEnd("");
       load();
     } finally {
       setCreatingDirecionadaLink(false);
@@ -254,6 +290,42 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active: !link.active }),
+    });
+    load();
+  }
+
+  async function handleAuthorize(linkId: number) {
+    if (!authorizeComment.trim()) {
+      setLinksError("Explique, no comentário, por que está autorizando essa prova fora do período.");
+      return;
+    }
+    setAuthorizing(true);
+    setLinksError(null);
+    try {
+      const res = await fetch(`/api/admin/exam-links/${linkId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "authorize", comment: authorizeComment.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setLinksError(data.error || "Falha ao autorizar.");
+        return;
+      }
+      setAuthorizingLinkId(null);
+      setAuthorizeComment("");
+      load();
+    } finally {
+      setAuthorizing(false);
+    }
+  }
+
+  async function handleRevokeAuthorization(linkId: number) {
+    if (!confirm("Revogar a autorização? O link volta a respeitar o período de aplicação.")) return;
+    await fetch(`/api/admin/exam-links/${linkId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "revoke-authorization" }),
     });
     load();
   }
@@ -297,6 +369,14 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
         {exam.sourceFileName && (
           <p className="mt-1 text-xs text-slate-400">Origem: {exam.sourceFileName}</p>
         )}
+        <a
+          href={`/api/admin/exams/${id}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+        >
+          Baixar prova em branco (PDF pra aplicar no papel)
+        </a>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -502,6 +582,22 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
               placeholder="Rótulo (opcional) — ex: Treinamento mensal"
               className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-xs"
             />
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <input
+                type="date"
+                value={geralPeriodStart}
+                onChange={(e) => setGeralPeriodStart(e.target.value)}
+                title="Aplicar a partir de"
+                className="w-full rounded-md border border-slate-300 px-2 py-2 text-xs"
+              />
+              <input
+                type="date"
+                value={geralPeriodEnd}
+                onChange={(e) => setGeralPeriodEnd(e.target.value)}
+                title="Até"
+                className="w-full rounded-md border border-slate-300 px-2 py-2 text-xs"
+              />
+            </div>
             <button
               disabled={isReadOnly || creatingGeralLink}
               className="mt-2 w-full rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
@@ -532,6 +628,22 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
               placeholder="Rótulo (opcional)"
               className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-xs"
             />
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <input
+                type="date"
+                value={direcionadaPeriodStart}
+                onChange={(e) => setDirecionadaPeriodStart(e.target.value)}
+                title="Aplicar a partir de"
+                className="w-full rounded-md border border-slate-300 px-2 py-2 text-xs"
+              />
+              <input
+                type="date"
+                value={direcionadaPeriodEnd}
+                onChange={(e) => setDirecionadaPeriodEnd(e.target.value)}
+                title="Até"
+                className="w-full rounded-md border border-slate-300 px-2 py-2 text-xs"
+              />
+            </div>
             <button
               disabled={isReadOnly || creatingDirecionadaLink || !direcionadaName || !direcionadaMatricula}
               className="mt-2 w-full rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
@@ -544,36 +656,103 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
         {examLinks.length > 0 && (
           <ul className="mt-4 divide-y divide-slate-100 rounded-md border border-slate-200">
             {examLinks.map((link) => (
-              <li key={link.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                <div className="min-w-0">
-                  <span
-                    className={`mr-2 rounded-full px-2 py-0.5 text-xs font-medium ${
-                      link.kind === "direcionada" ? "bg-indigo-100 text-indigo-700" : "bg-sky-100 text-sky-700"
-                    }`}
-                  >
-                    {link.kind === "direcionada" ? "Direcionada" : "Geral"}
-                  </span>
-                  <span className="text-slate-700">
-                    {link.kind === "direcionada" ? link.targetEmployeeName : link.label || "Sem rótulo"}
-                  </span>
-                  {!link.active && <span className="ml-2 text-xs text-slate-400">(desativado)</span>}
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    onClick={() => copyLink(link.token)}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
-                  >
-                    {copiedToken === link.token ? "Copiado!" : "Copiar link"}
-                  </button>
-                  {!isReadOnly && (
+              <li key={link.id} className="px-4 py-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className={`mr-2 rounded-full px-2 py-0.5 text-xs font-medium ${LINK_KIND_BADGE[link.kind]}`}>
+                      {LINK_KIND_LABEL[link.kind]}
+                    </span>
+                    <span className="text-slate-700">
+                      {link.kind === "direcionada" ? link.targetEmployeeName : link.label || "Sem rótulo"}
+                    </span>
+                    {!link.active && <span className="ml-2 text-xs text-slate-400">(desativado)</span>}
+                    <span
+                      className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        link.open ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {link.open ? "aberta" : "fechada"}
+                    </span>
+                    {(link.periodStart || link.periodEnd) && (
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        Período: {link.periodStart ? new Date(link.periodStart + "T00:00").toLocaleDateString("pt-BR") : "sem início"}
+                        {" até "}
+                        {link.periodEnd ? new Date(link.periodEnd + "T00:00").toLocaleDateString("pt-BR") : "sem fim"}
+                      </p>
+                    )}
+                    {link.authorizedAt && (
+                      <p className="mt-0.5 text-xs text-amber-700">
+                        Autorizada fora do período por {link.authorizedBy} — &quot;{link.authorizationComment}&quot;
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
                     <button
-                      onClick={() => toggleLinkActive(link)}
+                      onClick={() => copyLink(link.token)}
                       className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
                     >
-                      {link.active ? "Desativar" : "Reativar"}
+                      {copiedToken === link.token ? "Copiado!" : "Copiar link"}
                     </button>
-                  )}
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => toggleLinkActive(link)}
+                        className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                      >
+                        {link.active ? "Desativar" : "Reativar"}
+                      </button>
+                    )}
+                    {!isReadOnly && !link.open && !link.authorizedAt && (
+                      <button
+                        onClick={() => {
+                          setAuthorizingLinkId(authorizingLinkId === link.id ? null : link.id);
+                          setAuthorizeComment("");
+                        }}
+                        className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                      >
+                        Autorizar fora do período
+                      </button>
+                    )}
+                    {!isReadOnly && link.authorizedAt && (
+                      <button
+                        onClick={() => handleRevokeAuthorization(link.id)}
+                        className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                      >
+                        Revogar autorização
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {authorizingLinkId === link.id && (
+                  <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+                    <label className="block text-xs font-medium text-amber-900">
+                      Comentário do gestor (obrigatório) — por que está autorizando essa prova fora
+                      do período?
+                    </label>
+                    <textarea
+                      value={authorizeComment}
+                      onChange={(e) => setAuthorizeComment(e.target.value)}
+                      rows={2}
+                      className="mt-1 w-full rounded-md border border-amber-300 px-2 py-1.5 text-xs focus:outline-none"
+                      placeholder="Ex: colaborador estava afastado durante o período original."
+                    />
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={() => handleAuthorize(link.id)}
+                        disabled={authorizing}
+                        className="rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800 disabled:opacity-50"
+                      >
+                        {authorizing ? "Autorizando..." : "Confirmar autorização"}
+                      </button>
+                      <button
+                        onClick={() => setAuthorizingLinkId(null)}
+                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

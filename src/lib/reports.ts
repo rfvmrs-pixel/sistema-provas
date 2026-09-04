@@ -90,13 +90,14 @@ export async function getRoleSummary(sectorIds?: number[]): Promise<SummaryRow[]
 
 export async function getEmployeeSummary(
   sectorIds?: number[],
-): Promise<(SummaryRow & { sectorName: string; roleName: string })[]> {
+): Promise<(SummaryRow & { sectorName: string; roleId: number; roleName: string })[]> {
   const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
   const rows = await db
     .select({
       id: employees.id,
       name: employees.name,
       sectorName: sectors.name,
+      roleId: roles.id,
       roleName: roles.name,
       avgScore: avg(attempts.percentage),
       attemptCount: count(attempts.id),
@@ -109,18 +110,89 @@ export async function getEmployeeSummary(
       and(eq(attempts.employeeId, employees.id), isNotNull(attempts.percentage)),
     )
     .where(scope)
-    .groupBy(employees.id, employees.name, sectors.name, roles.name)
+    .groupBy(employees.id, employees.name, sectors.name, roles.id, roles.name)
     .orderBy(employees.name);
 
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     sectorName: r.sectorName,
+    roleId: r.roleId,
     roleName: r.roleName,
     avgScore: round(r.avgScore),
     attemptCount: Number(r.attemptCount),
     needsTraining: r.attemptCount > 0 && round(r.avgScore) < TRAINING_THRESHOLD,
   }));
+}
+
+// Classificação usada no prontuário individual do funcionário — Bronze
+// (abaixo de 70%), Prata (70% a 95%) e Ouro (acima de 95%). Só faz sentido
+// quando já existe pelo menos uma tentativa avaliada; ver getEmployeeReport.
+export type EmployeeTier = "bronze" | "prata" | "ouro";
+
+export function employeeTier(avgScore: number): EmployeeTier {
+  if (avgScore > 95) return "ouro";
+  if (avgScore >= 70) return "prata";
+  return "bronze";
+}
+
+// Tópicos/critérios de um único funcionário — mesmo padrão de
+// getTopicByRole/getTopicBySector, mas agrupado por funcionário. Usado só no
+// prontuário individual (getEmployeeReport), não precisa de sectorIds porque
+// já é filtrado por um employeeId específico (a visibilidade do Contrato é
+// checada antes, com canAccessSector, na rota que chama isso).
+export async function getEmployeeTopicSummary(employeeId: number): Promise<TopicRow[]> {
+  const rows = await db
+    .select({
+      topic: questions.topic,
+      totalAnswers: count(answers.id),
+      correctAnswers: sql<number>`sum(case when ${answers.correct} then 1 else 0 end)`.mapWith(Number),
+    })
+    .from(answers)
+    .innerJoin(questions, eq(answers.questionId, questions.id))
+    .innerJoin(attempts, eq(answers.attemptId, attempts.id))
+    .where(eq(attempts.employeeId, employeeId))
+    .groupBy(questions.topic)
+    .orderBy(questions.topic);
+
+  return rows
+    .filter((r) => r.topic)
+    .map((r) => {
+      const accuracy = r.totalAnswers > 0 ? Math.round((r.correctAnswers / r.totalAnswers) * 100) : 0;
+      return {
+        topic: r.topic as string,
+        accuracy,
+        totalAnswers: Number(r.totalAnswers),
+        needsTraining: accuracy < TRAINING_THRESHOLD,
+      };
+    })
+    .sort((a, b) => a.accuracy - b.accuracy);
+}
+
+// Prontuário individual: quantas provas feitas, % da nota média, onde o
+// funcionário está melhor/pior (por tema) e a classificação Bronze/Prata/
+// Ouro. `avgScore`/`attemptCount` somam Prova + Simulado (todas as
+// tentativas com nota do funcionário), igual ao resto do Painel.
+export async function getEmployeeReport(employeeId: number) {
+  const [summaryRow] = await db
+    .select({
+      avgScore: avg(attempts.percentage),
+      attemptCount: count(attempts.id),
+    })
+    .from(attempts)
+    .where(and(eq(attempts.employeeId, employeeId), isNotNull(attempts.percentage)));
+
+  const avgScore = round(summaryRow?.avgScore ?? null);
+  const attemptCount = Number(summaryRow?.attemptCount ?? 0);
+  const topics = await getEmployeeTopicSummary(employeeId);
+
+  return {
+    avgScore,
+    attemptCount,
+    tier: attemptCount > 0 ? employeeTier(avgScore) : null,
+    bestTopics: [...topics].sort((a, b) => b.accuracy - a.accuracy).slice(0, 5),
+    worstTopics: topics.slice(0, 5),
+  };
 }
 
 export async function getTopicSummary(sectorIds?: number[]): Promise<TopicRow[]> {

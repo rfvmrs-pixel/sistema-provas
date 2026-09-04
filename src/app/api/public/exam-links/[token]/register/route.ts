@@ -7,6 +7,7 @@ import { hashPassword } from "@/lib/password";
 import { generateLinkToken } from "@/lib/token";
 import { isValidTenureCode } from "@/lib/tenure";
 import { ensureFreshQuestionSet } from "@/lib/attemptLimit";
+import { isExamLinkOpen, examLinkClosedReason } from "@/lib/examLinkPeriod";
 
 // Autocadastro público pelo link de aplicação — sem senha. O colaborador
 // informa nome, matrícula e tempo de empresa (Contrato/Função já são fixos,
@@ -19,6 +20,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ token:
   const link = await db.query.examLinks.findFirst({ where: eq(examLinks.token, token) });
   if (!link || !link.active) {
     return NextResponse.json({ error: "Esse link não está mais disponível." }, { status: 404 });
+  }
+  if (!isExamLinkOpen(link)) {
+    return NextResponse.json({ error: examLinkClosedReason(link) }, { status: 403 });
   }
 
   const exam = await db.query.exams.findFirst({ where: eq(exams.id, link.examId) });

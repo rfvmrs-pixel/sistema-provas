@@ -14,6 +14,7 @@ import { getVisibleSectorIds } from "@/lib/requireAdmin";
 import { MeterBarList } from "@/components/charts/MeterBar";
 import { BarChart } from "@/components/charts/BarChart";
 import { TrendLineChart } from "@/components/charts/TrendLineChart";
+import { RoleEmployeeDrilldown } from "@/components/dashboard/RoleEmployeeDrilldown";
 
 function ScoreBadge({ value }: { value: number }) {
   const color =
@@ -168,16 +169,12 @@ export default async function AdminDashboardPage() {
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">Desempenho por função</h2>
+          <p className="text-xs text-slate-500">
+            Clique numa função para ver os funcionários dela; clique no nome do funcionário para
+            abrir o prontuário individual.
+          </p>
           <div className="mt-4">
-            <BarChart
-              emptyMessage="Nenhuma função cadastrada."
-              items={roleSummary.map((r) => ({
-                id: r.id,
-                label: r.name,
-                value: r.avgScore,
-                sublabel: `${r.attemptCount} ${r.attemptCount === 1 ? "tentativa" : "tentativas"}`,
-              }))}
-            />
+            <RoleEmployeeDrilldown roleSummary={roleSummary} employeeSummary={employeeSummary} />
           </div>
         </section>
 
@@ -261,35 +258,9 @@ export default async function AdminDashboardPage() {
               </div>
             </div>
           )}
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-500">
-                  <th className="pb-2">Tema</th>
-                  <th className="pb-2">Respostas</th>
-                  <th className="pb-2">Acerto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topicSummary.length === 0 && (
-                  <tr>
-                    <td className="py-3 text-slate-400" colSpan={3}>
-                      Ainda sem dados suficientes.
-                    </td>
-                  </tr>
-                )}
-                {topicSummary.map((t) => (
-                  <tr key={t.topic} className="border-t border-slate-100">
-                    <td className="py-2 text-slate-800">{t.topic}</td>
-                    <td className="py-2 text-slate-500">{t.totalAnswers}</td>
-                    <td className="py-2">
-                      <ScoreBadge value={t.accuracy} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {topicSummary.length === 0 && (
+            <p className="mt-4 text-sm text-slate-400">Ainda sem dados suficientes.</p>
+          )}
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">

@@ -92,6 +92,13 @@
       "when": 1788273138098,
       "tag": "0012_add_operator_and_category",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788548071257,
+      "tag": "0013_add_exam_link_period_and_authorization",
+      "breakpoints": true
     }
   ]
 }
