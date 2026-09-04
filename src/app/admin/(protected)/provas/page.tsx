@@ -31,6 +31,8 @@ type Exam = {
   passingScore: number;
   documentType: DocumentType;
   category: string | null;
+  focus: string | null;
+  version: number;
   createdAt: string;
   sectorId: number;
   sectorName: string;
@@ -69,8 +71,10 @@ export default function ProvasPage() {
   const [roleId, setRoleId] = useState("");
   const [documentType, setDocumentType] = useState<DocumentType>("IT");
   const [numQuestions, setNumQuestions] = useState(15);
+  const [focus, setFocus] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   // Tipo de aplicação + período — já escolhidos aqui na tela inicial, sem
   // precisar ir pra uma segunda tela (ver /admin/provas/[id] > Links de
@@ -113,7 +117,7 @@ export default function ProvasPage() {
     load();
   }, []);
 
-  async function handleGenerate(e: React.FormEvent) {
+  async function handleGenerate(e: React.FormEvent, confirmDuplicate = false) {
     e.preventDefault();
     if (!documentId || !roleId) return;
     if (applicationKind === "direcionada" && (!direcionadaName.trim() || !direcionadaMatricula.trim())) {
@@ -125,15 +129,27 @@ export default function ProvasPage() {
       return;
     }
     setGenerateError(null);
+    setDuplicateWarning(null);
     setGeneratedLink(null);
     setGenerating(true);
     try {
       const res = await fetch("/api/admin/exams", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentId: Number(documentId), roleId: Number(roleId), documentType, numQuestions }),
+        body: JSON.stringify({
+          documentId: Number(documentId),
+          roleId: Number(roleId),
+          documentType,
+          numQuestions,
+          focus: focus.trim() || undefined,
+          confirmDuplicate,
+        }),
       });
       const data = await res.json();
+      if (res.status === 409 && data.duplicate) {
+        setDuplicateWarning(data.error);
+        return;
+      }
       if (!res.ok) {
         setGenerateError(data.error || "Falha ao gerar a prova.");
         return;
@@ -165,6 +181,7 @@ export default function ProvasPage() {
 
       setDocumentId("");
       setRoleId("");
+      setFocus("");
       setLinkLabel("");
       setPeriodStart("");
       setPeriodEnd("");
@@ -332,6 +349,23 @@ export default function ProvasPage() {
             </select>
           </div>
           <div className="sm:col-span-2">
+            <label className="block text-xs font-medium text-slate-700">
+              Foco/tema específico (opcional)
+            </label>
+            <textarea
+              value={focus}
+              onChange={(e) => setFocus(e.target.value)}
+              rows={2}
+              maxLength={300}
+              placeholder="Ex: focar só em uso de EPI e procedimentos de emergência, deixando de lado o resto do documento"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              Escreva aqui se quiser que a prova seja direcionada pra um tema/tópico específico do
+              documento, em vez de cobrir tudo. Deixe em branco pra uma prova geral do documento.
+            </p>
+          </div>
+          <div className="sm:col-span-2">
             <button
               disabled={isReadOnly || generating || !documentId || !roleId}
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
@@ -339,6 +373,27 @@ export default function ProvasPage() {
               {generating ? `Gerando prova com IA (${numQuestions} questões)...` : "Gerar prova"}
             </button>
             {generateError && <p className="mt-2 text-sm text-red-600">{generateError}</p>}
+            {duplicateWarning && (
+              <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <p>{duplicateWarning}</p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => handleGenerate(e as unknown as React.FormEvent, true)}
+                    className="rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800"
+                  >
+                    Gerar mesmo assim (nova versão)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDuplicateWarning(null)}
+                    className="rounded-md border border-amber-300 px-3 py-1.5 text-xs text-amber-800 hover:bg-amber-100"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </form>
 
@@ -481,8 +536,16 @@ export default function ProvasPage() {
                     <Link href={`/admin/provas/${exam.id}`} className="text-slate-800 hover:underline">
                       {exam.title}
                     </Link>
+                    <span className="ml-2 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                      v{exam.version}
+                    </span>
                     {exam.sourceFileName && (
                       <p className="text-xs text-slate-400">{exam.sourceFileName}</p>
+                    )}
+                    {exam.focus && (
+                      <p className="text-xs text-indigo-600" title={exam.focus}>
+                        Foco: {exam.focus}
+                      </p>
                     )}
                   </td>
                   <td className="px-5 py-3">

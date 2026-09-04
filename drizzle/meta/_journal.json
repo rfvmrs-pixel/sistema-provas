@@ -99,6 +99,13 @@
       "when": 1788548071257,
       "tag": "0013_add_exam_link_period_and_authorization",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788552887009,
+      "tag": "0014_add_exam_focus_and_version",
+      "breakpoints": true
     }
   ]
 }

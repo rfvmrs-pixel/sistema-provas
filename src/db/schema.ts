@@ -174,6 +174,15 @@ export const exams = pgTable(
     // Preliminar de Risco) ou MANUAL (manual de equipamento). Influencia o
     // prompt de geração das questões.
     documentType: varchar("document_type", { length: 10 }).default("IT").notNull(),
+    // Foco/tema específico que o professor pediu antes de gerar (opcional) —
+    // ex.: "só sobre uso de EPI". Guardado aqui pra aparecer na tela e
+    // reaproveitar se alguém gerar outra versão depois. Ver lib/ai.ts.
+    focus: varchar("focus", { length: 300 }),
+    // Versão dessa prova pro mesmo documento+função+tipo — 1 na primeira vez
+    // que alguém gera; sobe pra 2, 3... só quando o professor confirma
+    // explicitamente que quer gerar de novo (ver POST /api/admin/exams,
+    // fica um aviso de "já existe uma prova pra isso" antes de duplicar).
+    version: integer("version").default(1).notNull(),
     // Copiado do documento de origem no momento da geração — categoria livre
     // (ex.: "Guindastes") pra filtrar provas/simulados por tipo de
     // equipamento, principalmente em Treinamentos.

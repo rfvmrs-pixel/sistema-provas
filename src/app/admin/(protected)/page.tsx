@@ -8,6 +8,8 @@ import {
   getScoreTrend,
   getAvgDurationMinutes,
   getTenureSummary,
+  employeeTier,
+  type EmployeeTier,
 } from "@/lib/reports";
 import { getAdminSession } from "@/lib/session";
 import { getVisibleSectorIds } from "@/lib/requireAdmin";
@@ -15,6 +17,55 @@ import { MeterBarList } from "@/components/charts/MeterBar";
 import { BarChart } from "@/components/charts/BarChart";
 import { TrendLineChart } from "@/components/charts/TrendLineChart";
 import { RoleEmployeeDrilldown } from "@/components/dashboard/RoleEmployeeDrilldown";
+
+const TIER_ORDER: EmployeeTier[] = ["ouro", "prata", "bronze"];
+const TIER_INFO: Record<EmployeeTier, { label: string; emoji: string; className: string }> = {
+  ouro: { label: "Ouro (acima de 95%)", emoji: "🥇", className: "border-amber-300 bg-amber-50 text-amber-800" },
+  prata: { label: "Prata (70% a 95%)", emoji: "🥈", className: "border-slate-300 bg-slate-50 text-slate-700" },
+  bronze: { label: "Bronze (abaixo de 70%)", emoji: "🥉", className: "border-orange-300 bg-orange-50 text-orange-800" },
+};
+
+function TierRankColumn({
+  title,
+  items,
+}: {
+  title: string;
+  items: { id: number | string; name: string; avgScore: number; attemptCount: number }[];
+}) {
+  const evaluated = items.filter((it) => it.attemptCount > 0);
+  const grouped: Record<EmployeeTier, typeof items> = { ouro: [], prata: [], bronze: [] };
+  for (const item of evaluated) grouped[employeeTier(item.avgScore)].push(item);
+  for (const tier of TIER_ORDER) grouped[tier].sort((a, b) => b.avgScore - a.avgScore);
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase text-slate-500">{title}</h3>
+      <div className="mt-2 space-y-2">
+        {evaluated.length === 0 && <p className="text-sm text-slate-400">Sem dados ainda.</p>}
+        {TIER_ORDER.map((tier) => {
+          const list = grouped[tier];
+          if (list.length === 0) return null;
+          const info = TIER_INFO[tier];
+          return (
+            <div key={tier} className={`rounded-md border p-2.5 ${info.className}`}>
+              <p className="text-xs font-semibold">
+                {info.emoji} {info.label} · {list.length}
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {list.map((it) => (
+                  <li key={it.id} className="flex items-center justify-between text-xs">
+                    <span className="truncate">{it.name}</span>
+                    <span className="ml-2 shrink-0 font-medium">{it.avgScore}%</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function ScoreBadge({ value }: { value: number }) {
   const color =
@@ -303,6 +354,32 @@ export default async function AdminDashboardPage() {
           </div>
         </section>
       </div>
+
+      {admin?.role === "admin" && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Ranking Bronze / Prata / Ouro
+          </h2>
+          <p className="text-xs text-slate-500">
+            Visível só pra contas com permissão de admin geral — classifica pela nota média:
+            Bronze abaixo de 70%, Prata de 70% a 95%, Ouro acima de 95%.
+          </p>
+          <div className="mt-4 grid gap-6 sm:grid-cols-3">
+            <TierRankColumn
+              title="Por Contrato"
+              items={sectorSummary.map((s) => ({ id: s.id, name: s.name, avgScore: s.avgScore, attemptCount: s.attemptCount }))}
+            />
+            <TierRankColumn
+              title="Por Função"
+              items={roleSummary.map((r) => ({ id: r.id, name: r.name, avgScore: r.avgScore, attemptCount: r.attemptCount }))}
+            />
+            <TierRankColumn
+              title="Por Colaborador"
+              items={employeeSummary.map((e) => ({ id: e.id, name: e.name, avgScore: e.avgScore, attemptCount: e.attemptCount }))}
+            />
+          </div>
+        </section>
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-slate-900">Últimas tentativas</h2>

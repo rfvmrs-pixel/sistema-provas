@@ -33,6 +33,8 @@ export async function GET() {
       passingScore: exams.passingScore,
       documentType: exams.documentType,
       category: exams.category,
+      focus: exams.focus,
+      version: exams.version,
       documentId: exams.documentId,
       createdAt: exams.createdAt,
       sectorId: exams.sectorId,
@@ -67,6 +69,8 @@ export async function POST(request: NextRequest) {
   const roleId = Number(body.roleId);
   const numQuestionsRaw = Number(body.numQuestions);
   const numQuestions = ALLOWED_QUESTION_COUNTS.includes(numQuestionsRaw) ? numQuestionsRaw : 15;
+  const focus = typeof body.focus === "string" ? body.focus.trim().slice(0, 300) : "";
+  const confirmDuplicate = body.confirmDuplicate === true;
 
   if (!documentId) {
     return NextResponse.json({ error: "Selecione um PDF da biblioteca." }, { status: 400 });
@@ -89,6 +93,31 @@ export async function POST(request: NextRequest) {
   // client possa mandar aqui.
   const documentType = document.documentType as DocumentType;
 
+  // Já existe prova pra esse mesmo documento+função+tipo? Pra não ficar
+  // gerando (e replicando) a prova várias vezes sem querer, avisa e pede
+  // confirmação explícita antes de criar mais uma versão.
+  const existing = await db
+    .select({ id: exams.id, version: exams.version, title: exams.title })
+    .from(exams)
+    .where(
+      sql`${exams.documentId} = ${documentId} and ${exams.roleId} = ${roleId} and ${exams.documentType} = ${documentType}`,
+    )
+    .orderBy(desc(exams.version));
+
+  if (existing.length > 0 && !confirmDuplicate) {
+    return NextResponse.json(
+      {
+        duplicate: true,
+        error: `Já existe ${existing.length === 1 ? "uma prova gerada" : `${existing.length} provas geradas`} pra esse PDF + função (a mais recente: "${existing[0].title}", v${existing[0].version}). Gerar de novo cria a v${existing[0].version + 1} em vez de editar a existente — confirme se é isso mesmo que você quer.`,
+        existingCount: existing.length,
+        latestVersion: existing[0].version,
+        latestTitle: existing[0].title,
+      },
+      { status: 409 },
+    );
+  }
+  const version = existing.length > 0 ? existing[0].version + 1 : 1;
+
   const [sector, role] = await Promise.all([
     db.query.sectors.findFirst({ where: eq(sectors.id, document.sectorId) }),
     db.query.roles.findFirst({ where: eq(roles.id, roleId) }),
@@ -103,6 +132,7 @@ export async function POST(request: NextRequest) {
       sourceFileName: document.fileName,
       documentType,
       roleName: role.name,
+      focus: focus || undefined,
     });
   } catch (err) {
     return NextResponse.json(
@@ -122,6 +152,8 @@ export async function POST(request: NextRequest) {
       documentId: document.id,
       sectorId: document.sectorId,
       roleId,
+      focus: focus || null,
+      version,
     })
     .returning();
 

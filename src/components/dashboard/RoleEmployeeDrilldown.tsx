@@ -13,6 +13,14 @@ type EmployeeRow = {
 };
 
 type TopicRow = { topic: string; accuracy: number; totalAnswers: number };
+type AttemptHistoryRow = {
+  id: number;
+  examTitle: string;
+  finishedAt: string | null;
+  percentage: number | null;
+  mode: "simulado" | "oficial";
+  sessionLabel: string | null;
+};
 type EmployeeReport = {
   employee: { id: number; name: string; matricula: string | null; sectorName: string; roleName: string; tenure: string };
   avgScore: number;
@@ -20,6 +28,7 @@ type EmployeeReport = {
   tier: "bronze" | "prata" | "ouro" | null;
   bestTopics: TopicRow[];
   worstTopics: TopicRow[];
+  history: AttemptHistoryRow[];
 };
 
 const TIER_INFO: Record<"bronze" | "prata" | "ouro", { label: string; range: string; className: string; emoji: string }> = {
@@ -150,6 +159,30 @@ function EmployeeModal({ employeeId, onClose }: { employeeId: number; onClose: (
                   ))}
                 </ul>
               </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase text-slate-500">Histórico de tentativas</p>
+              {report.history.length === 0 && <p className="mt-1 text-sm text-slate-400">Sem tentativas ainda.</p>}
+              {report.history.length > 0 && (
+                <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                  {report.history.map((h) => (
+                    <li key={h.id} className="flex items-center justify-between gap-2 border-t border-slate-100 py-1.5 text-sm first:border-t-0">
+                      <div className="min-w-0">
+                        <p className="truncate text-slate-700">{h.examTitle}</p>
+                        <p className="text-xs text-slate-400">
+                          {h.finishedAt ? new Date(h.finishedAt).toLocaleDateString("pt-BR") : "—"} ·{" "}
+                          {h.mode === "simulado" ? "Simulado" : "Prova oficial"}
+                          {h.sessionLabel ? ` · ${h.sessionLabel}` : ""}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 font-medium ${severityColor(h.percentage ?? 0)}`}>
+                        {h.percentage ?? 0}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         )}

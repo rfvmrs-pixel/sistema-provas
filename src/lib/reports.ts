@@ -169,10 +169,30 @@ export async function getEmployeeTopicSummary(employeeId: number): Promise<Topic
     .sort((a, b) => a.accuracy - b.accuracy);
 }
 
+// Histórico de tentativas de um funcionário — mostrado no prontuário
+// individual (ver getEmployeeReport), mais recentes primeiro.
+export async function getEmployeeAttemptHistory(employeeId: number, limit = 15) {
+  return db
+    .select({
+      id: attempts.id,
+      examTitle: exams.title,
+      finishedAt: attempts.finishedAt,
+      percentage: attempts.percentage,
+      mode: attempts.mode,
+      sessionLabel: attempts.sessionLabel,
+    })
+    .from(attempts)
+    .innerJoin(exams, eq(attempts.examId, exams.id))
+    .where(and(eq(attempts.employeeId, employeeId), isNotNull(attempts.finishedAt)))
+    .orderBy(sql`${attempts.finishedAt} desc`)
+    .limit(limit);
+}
+
 // Prontuário individual: quantas provas feitas, % da nota média, onde o
-// funcionário está melhor/pior (por tema) e a classificação Bronze/Prata/
-// Ouro. `avgScore`/`attemptCount` somam Prova + Simulado (todas as
-// tentativas com nota do funcionário), igual ao resto do Painel.
+// funcionário está melhor/pior (por tema), o histórico de tentativas e a
+// classificação Bronze/Prata/Ouro. `avgScore`/`attemptCount` somam Prova +
+// Simulado (todas as tentativas com nota do funcionário), igual ao resto do
+// Painel.
 export async function getEmployeeReport(employeeId: number) {
   const [summaryRow] = await db
     .select({
@@ -184,7 +204,10 @@ export async function getEmployeeReport(employeeId: number) {
 
   const avgScore = round(summaryRow?.avgScore ?? null);
   const attemptCount = Number(summaryRow?.attemptCount ?? 0);
-  const topics = await getEmployeeTopicSummary(employeeId);
+  const [topics, history] = await Promise.all([
+    getEmployeeTopicSummary(employeeId),
+    getEmployeeAttemptHistory(employeeId),
+  ]);
 
   return {
     avgScore,
@@ -192,6 +215,7 @@ export async function getEmployeeReport(employeeId: number) {
     tier: attemptCount > 0 ? employeeTier(avgScore) : null,
     bestTopics: [...topics].sort((a, b) => b.accuracy - a.accuracy).slice(0, 5),
     worstTopics: topics.slice(0, 5),
+    history,
   };
 }
 

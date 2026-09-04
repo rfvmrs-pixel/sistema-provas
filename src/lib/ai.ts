@@ -56,6 +56,7 @@ export async function generateExamFromText(
     sourceFileName?: string;
     documentType?: DocumentType;
     roleName?: string;
+    focus?: string;
   } = {},
 ): Promise<GeneratedExam> {
   const numQuestions = opts.numQuestions ?? 15;
@@ -63,13 +64,22 @@ export async function generateExamFromText(
     opts.documentType === "APR" ? "APR" : opts.documentType === "MANUAL" ? "MANUAL" : "IT";
   const client = getClient();
 
+  // Foco/tema específico escrito pelo professor antes de gerar (opcional) —
+  // ex.: "só sobre uso de EPI" ou "procedimentos de emergência". Quando
+  // informado, a prova inteira deve girar em torno disso, mesmo que o
+  // documento aborde outros assuntos também.
+  const focus = opts.focus?.trim();
+  const focusGuidance = focus
+    ? ` FOCO OBRIGATÓRIO desta prova: o professor pediu que ela seja voltada especificamente para "${focus}". Gere as ${numQuestions} questões girando em torno desse foco — use o restante do documento só como contexto de apoio, não para gerar questões fora desse tema. Se o documento não tiver conteúdo suficiente sobre esse foco específico para todas as questões, aproveite ao máximo o que existir sobre o tema e complete com questões o mais próximas possível desse foco.`
+    : "";
+
   const message = await client.messages.create({
     model: MODEL,
     max_tokens: 8000,
     system:
       `Você é um especialista em treinamento corporativo e elaboração de avaliações (provas) de múltipla escolha em português do Brasil, a partir de material de treinamento (manuais, procedimentos, políticas internas de empresas de logística). ${DOCUMENT_TYPE_GUIDANCE[documentType]} Gere questões claras, objetivas, que testem compreensão real do conteúdo (não só decoreba de frases soltas), com exatamente 4 alternativas plausíveis cada, apenas uma correta. Sempre classifique cada questão com um 'topic' curto (2-5 palavras) que identifique o tema/assunto dentro do documento, para permitir análise posterior de quais temas os funcionários têm mais dificuldade.${
         opts.roleName ? ` ${RESPONSIBLE_ROLE_GUIDANCE(opts.roleName)}` : ""
-      }`,
+      }${focusGuidance}`,
     messages: [
       {
         role: "user",
@@ -79,7 +89,7 @@ export async function generateExamFromText(
           opts.roleName
             ? ` Lembre-se: só pergunte sobre responsabilidades de "${opts.roleName}" ou marcadas como "Todos" — nunca sobre responsabilidade exclusiva de outra função.`
             : ""
-        }\n\nConteúdo:\n"""\n${sourceText}\n"""`,
+        }${focus ? ` Lembre-se: o foco pedido pelo professor é "${focus}" — a prova inteira precisa girar em torno disso.` : ""}\n\nConteúdo:\n"""\n${sourceText}\n"""`,
       },
     ],
     tools: [

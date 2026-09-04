@@ -24,6 +24,8 @@ type Exam = {
   passingScore: number;
   documentType: DocumentType;
   sourceFileName: string | null;
+  focus: string | null;
+  version: number;
   sectorId: number;
   roleId: number;
   sector?: { id: number; name: string };
@@ -366,6 +368,15 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
           </span>
         </h1>
         {exam.summary && <p className="mt-1 text-sm text-slate-500">{exam.summary}</p>}
+        <p className="mt-1 text-xs text-slate-500">
+          Versão <span className="font-semibold">v{exam.version}</span>
+          {exam.focus && (
+            <>
+              {" "}
+              · Foco: <span className="text-indigo-600">{exam.focus}</span>
+            </>
+          )}
+        </p>
         {exam.sourceFileName && (
           <p className="mt-1 text-xs text-slate-400">Origem: {exam.sourceFileName}</p>
         )}
