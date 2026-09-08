@@ -163,7 +163,41 @@ export async function generateExamFromText(
     throw new Error("A IA não gerou nenhuma questão a partir do documento enviado.");
   }
 
+  // A IA tende a "preferir" sempre a mesma posição pra alternativa certa
+  // (normalmente B), mesmo pedindo pra variar no prompt — isso deixa
+  // óbvio de mais pra quem faz a prova. Embaralha de verdade a ordem das
+  // alternativas de cada questão aqui no código (não depende da IA
+  // cooperar), garantindo uma distribuição razoavelmente equilibrada entre
+  // A/B/C/D ao longo da prova.
+  parsed.questions = parsed.questions.map(shuffleQuestionOptions);
+
   return parsed;
+}
+
+// Fisher-Yates na ordem das alternativas de uma questão, mantendo o texto
+// de cada uma junto da letra certa e recalculando qual letra corresponde à
+// resposta correta depois do embaralhamento. Também usado pra "corrigir"
+// provas já geradas mas que ainda não têm tentativa (ver
+// /api/admin/exams/[id]/shuffle-options) — não pode ser usado em provas já
+// respondidas porque mudaria o que cada letra armazenada em answers.selectedKey
+// significa retroativamente.
+export function shuffleQuestionOptions<
+  Q extends { options: { key: string; text: string }[]; correctKey: string },
+>(question: Q): Q {
+  const keys = ["A", "B", "C", "D"] as const;
+  const correctIndex = question.options.findIndex((o) => o.key === question.correctKey);
+  const order = question.options.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  const options = order.map((originalIndex, newIndex) => ({
+    key: keys[newIndex] ?? question.options[originalIndex].key,
+    text: question.options[originalIndex].text,
+  }));
+  const newCorrectPosition = order.indexOf(correctIndex);
+  const correctKey = keys[newCorrectPosition] ?? question.correctKey;
+  return { ...question, options, correctKey };
 }
 
 // ---------- Quadrinho de segurança (cenário para geração de imagem) ----------

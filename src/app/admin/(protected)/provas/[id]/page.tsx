@@ -81,6 +81,8 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
   const [exam, setExam] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [shuffling, setShuffling] = useState(false);
+  const [shuffleMessage, setShuffleMessage] = useState<string | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -118,6 +120,24 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
   const [authorizingLinkId, setAuthorizingLinkId] = useState<number | null>(null);
   const [authorizeComment, setAuthorizeComment] = useState("");
   const [authorizing, setAuthorizing] = useState(false);
+
+  async function handleShuffleOptions() {
+    if (!confirm("Reembaralhar a posição das alternativas de todas as questões dessa prova?")) return;
+    setShuffling(true);
+    setShuffleMessage(null);
+    try {
+      const res = await fetch(`/api/admin/exams/${id}/shuffle-options`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setShuffleMessage(data.error || "Falha ao reembaralhar.");
+        return;
+      }
+      setShuffleMessage("Alternativas reembaralhadas com sucesso.");
+      load();
+    } finally {
+      setShuffling(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -388,6 +408,17 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
         >
           Baixar prova em branco (PDF pra aplicar no papel)
         </a>
+        {!isReadOnly && attempts.length === 0 && (
+          <button
+            type="button"
+            onClick={handleShuffleOptions}
+            disabled={shuffling}
+            className="mt-3 ml-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+          >
+            {shuffling ? "Reembaralhando..." : "Reembaralhar alternativas (corrige viés de posição)"}
+          </button>
+        )}
+        {shuffleMessage && <p className="mt-2 text-xs text-slate-500">{shuffleMessage}</p>}
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
