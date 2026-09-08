@@ -352,10 +352,26 @@ export const examSchedules = pgTable(
       .notNull()
       .references(() => sectors.id, { onDelete: "cascade" }),
     documentId: integer("document_id").references(() => documents.id, { onDelete: "set null" }),
-    // Guarda o nome do documento mesmo se ele for apagado da biblioteca depois.
+    // Guarda o nome do documento mesmo se ele for apagado da biblioteca depois,
+    // ou uma descrição livre quando o PDF exato ainda não foi decidido (dá pra
+    // reservar a data no cronograma e escolher o PDF depois).
     documentLabel: varchar("document_label", { length: 300 }).notNull(),
     scheduledDate: date("scheduled_date").notNull(),
     note: varchar("note", { length: 300 }),
+    // "geral" | "direcionada" | "curso" | "simulado" — mesmo tipo de
+    // aplicação usado nos links de prova (ver exam_links.kind). Define como
+    // o link vai ser criado quando alguém acionar "Gerar prova agora".
+    kind: varchar("kind", { length: 20 }).default("geral").notNull(),
+    roleId: integer("role_id").references(() => roles.id, { onDelete: "set null" }),
+    numQuestions: integer("num_questions").default(15).notNull(),
+    // Só usado quando kind = "direcionada".
+    targetEmployeeName: varchar("target_employee_name", { length: 150 }),
+    targetEmployeeMatricula: varchar("target_employee_matricula", { length: 50 }),
+    // Preenchidos quando alguém aciona "Gerar prova agora" nesse agendamento
+    // — vira a prova + link de aplicação de verdade (ver POST
+    // /api/admin/schedules/[id]/generate). Null = ainda só planejado.
+    examId: integer("exam_id").references(() => exams.id, { onDelete: "set null" }),
+    examLinkId: integer("exam_link_id").references(() => examLinks.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("exam_schedules_sector_date_idx").on(t.sectorId, t.scheduledDate)],
@@ -456,4 +472,7 @@ export const answersRelations = relations(answers, ({ one }) => ({
 export const examSchedulesRelations = relations(examSchedules, ({ one }) => ({
   sector: one(sectors, { fields: [examSchedules.sectorId], references: [sectors.id] }),
   document: one(documents, { fields: [examSchedules.documentId], references: [documents.id] }),
+  role: one(roles, { fields: [examSchedules.roleId], references: [roles.id] }),
+  exam: one(exams, { fields: [examSchedules.examId], references: [exams.id] }),
+  examLink: one(examLinks, { fields: [examSchedules.examLinkId], references: [examLinks.id] }),
 }));
