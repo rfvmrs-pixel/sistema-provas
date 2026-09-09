@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ExamRunner } from "@/components/exam/ExamRunner";
+import { AttemptReview, type ReviewItem } from "@/components/exam/AttemptReview";
 
 type Sector = { id: number; name: string };
 type DocumentType = "IT" | "APR" | "MANUAL";
@@ -20,6 +21,30 @@ type Question = { id: number; text: string; options: Option[]; order: number };
 
 type Mode = "simulado" | "oficial";
 
+// Item do histórico em "Minhas provas" — provas já finalizadas pelo
+// colaborador, com nota, pra ele ver onde acertou/errou depois. Só faz
+// sentido no modo "simulado" (login com senha pessoal); no modo "oficial" a
+// sessão encerra assim que a prova termina.
+type MyAttemptItem = {
+  id: number;
+  examTitle: string;
+  finishedAt: string | null;
+  percentage: number | null;
+  mode: string;
+  sessionLabel: string | null;
+};
+type MyAttemptDetail = {
+  attempt: {
+    id: number;
+    examTitle: string;
+    finishedAt: string | null;
+    percentage: number | null;
+    passingScore: number;
+    passed?: boolean;
+  };
+  review: ReviewItem[];
+};
+
 type Step =
   | { kind: "login" }
   | { kind: "list"; employeeName: string; mode: Mode }
@@ -30,7 +55,9 @@ type Step =
       questions: Question[];
       mode: Mode;
       startedAt?: string;
-    };
+    }
+  | { kind: "myExams"; employeeName: string; mode: Mode; attempts: MyAttemptItem[]; loading: boolean }
+  | { kind: "myExamDetail"; employeeName: string; mode: Mode; detail: MyAttemptDetail | null; loading: boolean };
 
 export default function ProvaPage() {
   const [step, setStep] = useState<Step>({ kind: "login" });
@@ -116,6 +143,32 @@ export default function ProvaPage() {
   async function backToList() {
     const { mode } = await loadExams();
     setStep({ kind: "list", employeeName: name, mode });
+  }
+
+  async function openMyExams(employeeName: string, mode: Mode) {
+    setStep({ kind: "myExams", employeeName, mode, attempts: [], loading: true });
+    const res = await fetch("/api/employee/attempts");
+    const data = await res.json();
+    setStep({
+      kind: "myExams",
+      employeeName,
+      mode,
+      attempts: res.ok ? data.attempts ?? [] : [],
+      loading: false,
+    });
+  }
+
+  async function openMyExamDetail(employeeName: string, mode: Mode, attemptId: number) {
+    setStep({ kind: "myExamDetail", employeeName, mode, detail: null, loading: true });
+    const res = await fetch(`/api/employee/attempts/${attemptId}`);
+    const data = await res.json();
+    setStep({
+      kind: "myExamDetail",
+      employeeName,
+      mode,
+      detail: res.ok ? data : null,
+      loading: false,
+    });
   }
 
   return (
@@ -217,7 +270,17 @@ export default function ProvaPage() {
 
         {step.kind === "list" && (
           <div className="space-y-4">
-            <h1 className="text-lg font-semibold text-slate-900">Olá, {step.employeeName.split(" ")[0]}</h1>
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-lg font-semibold text-slate-900">Olá, {step.employeeName.split(" ")[0]}</h1>
+              {step.mode === "simulado" && (
+                <button
+                  onClick={() => openMyExams(step.employeeName, step.mode)}
+                  className="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  Minhas provas
+                </button>
+              )}
+            </div>
             <p className="text-sm text-slate-500">Provas disponíveis:</p>
             {exams.length === 0 && (
               <p className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-400">
@@ -272,6 +335,102 @@ export default function ProvaPage() {
             startedAt={step.startedAt}
             onExit={backToList}
           />
+        )}
+
+        {step.kind === "myExams" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-lg font-semibold text-slate-900">Minhas provas</h1>
+              <button
+                onClick={() => setStep({ kind: "list", employeeName: step.employeeName, mode: step.mode })}
+                className="shrink-0 text-xs font-medium text-slate-500 hover:text-slate-700"
+              >
+                ← voltar
+              </button>
+            </div>
+            <p className="text-sm text-slate-500">
+              Provas que você já respondeu — clique numa delas pra ver onde acertou e errou.
+            </p>
+            {step.loading && <p className="text-sm text-slate-400">Carregando...</p>}
+            {!step.loading && step.attempts.length === 0 && (
+              <p className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-400">
+                Você ainda não finalizou nenhuma prova.
+              </p>
+            )}
+            {!step.loading &&
+              step.attempts.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => openMyExamDetail(step.employeeName, step.mode, a.id)}
+                  className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left hover:border-slate-300 hover:shadow-sm"
+                >
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900">{a.examTitle}</h2>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {a.finishedAt ? new Date(a.finishedAt).toLocaleString("pt-BR") : "-"}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                      (a.percentage ?? 0) >= 70
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {a.percentage ?? 0}%
+                  </span>
+                </button>
+              ))}
+          </div>
+        )}
+
+        {step.kind === "myExamDetail" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-lg font-semibold text-slate-900">
+                {step.detail?.attempt.examTitle ?? "Prova"}
+              </h1>
+              <button
+                onClick={() => openMyExams(step.employeeName, step.mode)}
+                className="shrink-0 text-xs font-medium text-slate-500 hover:text-slate-700"
+              >
+                ← voltar
+              </button>
+            </div>
+            {step.loading && <p className="text-sm text-slate-400">Carregando...</p>}
+            {!step.loading && !step.detail && (
+              <p className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-400">
+                Não foi possível carregar essa prova.
+              </p>
+            )}
+            {!step.loading && step.detail && (
+              <>
+                <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
+                  <p className="text-sm text-slate-500">Sua nota</p>
+                  <p
+                    className={`mt-1 text-3xl font-semibold ${
+                      (step.detail.attempt.percentage ?? 0) >= step.detail.attempt.passingScore
+                        ? "text-emerald-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {step.detail.attempt.percentage ?? 0}%
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {step.detail.attempt.finishedAt
+                      ? new Date(step.detail.attempt.finishedAt).toLocaleString("pt-BR")
+                      : ""}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-5">
+                  <h2 className="text-sm font-semibold text-slate-900">Revisão</h2>
+                  <div className="mt-3">
+                    <AttemptReview items={step.detail.review} />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>

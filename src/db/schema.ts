@@ -30,7 +30,7 @@ export const sectors = pgTable("sectors", {
 //                       padrão (sem linhas em admin_sectors) enxergam TODOS os
 //                       Contratos. Se tiverem linhas em admin_sectors, ficam
 //                       restritos a esse GRUPO de Contratos (ex.: "Diretoria
-//                       de Operações" = ARM RIO+TPS+SPOT+EQUINOR) — diferente
+//                       de Operações" = POLI RIO+TPS+SPOT+EQUINOR) — diferente
 //                       do gestor, que é sempre travado num único Contrato.
 // sectorId = X, role "gestor" -> só enxerga/gerencia o próprio contrato (Setor),
 //                       com permissão de escrita normal dentro dele.

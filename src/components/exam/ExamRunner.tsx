@@ -2,19 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { EXAM_TIME_LIMIT_MINUTES, EXAM_TIME_LIMIT_MS } from "@/lib/examTimer";
+import { AttemptReview, type ReviewItem } from "@/components/exam/AttemptReview";
 
 type Option = { key: string; text: string };
 type Question = { id: number; text: string; options: Option[]; order: number };
-type ReviewItem = {
-  questionId: number;
-  text: string;
-  options: Option[];
-  correctKey: string;
-  selectedKey: string | null;
-  correct: boolean;
-  explanation: string | null;
-  topic: string | null;
-};
 
 type Mode = "simulado" | "oficial";
 
@@ -253,38 +244,9 @@ export function ExamRunner({ attemptId, examTitle, questions, mode, startedAt, o
 
       <div className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-slate-900">Revisão</h2>
-        <ol className="mt-3 space-y-4">
-          {step.review.map((r, idx) => (
-            <li key={r.questionId} className="border-t border-slate-100 pt-3 first:border-0 first:pt-0">
-              <p className="text-sm font-medium text-slate-800">
-                {idx + 1}. {r.text}
-              </p>
-              <ul className="mt-1 space-y-1 text-sm">
-                {r.options.map((opt) => {
-                  const isCorrect = opt.key === r.correctKey;
-                  const isSelected = opt.key === r.selectedKey;
-                  return (
-                    <li
-                      key={opt.key}
-                      className={
-                        isCorrect
-                          ? "font-medium text-emerald-700"
-                          : isSelected
-                            ? "font-medium text-red-600"
-                            : "text-slate-500"
-                      }
-                    >
-                      {opt.key}) {opt.text}
-                      {isCorrect && " ✓"}
-                      {isSelected && !isCorrect && " (sua resposta)"}
-                    </li>
-                  );
-                })}
-              </ul>
-              {r.explanation && <p className="mt-1 text-xs text-slate-400">{r.explanation}</p>}
-            </li>
-          ))}
-        </ol>
+        <div className="mt-3">
+          <AttemptReview items={step.review} />
+        </div>
       </div>
 
       {afterResult}

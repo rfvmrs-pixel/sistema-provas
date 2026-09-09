@@ -12,9 +12,9 @@ const TRIUNFO_FULL = "/logos/triunfo_full.png";
 type Sector = { id: number; name: string };
 
 // Ordem manual dos cartões de Contrato na tela de abertura — os "BR"
-// (Petrobras: ARM RIO/LON1/LON2) ficam juntos, com EQUINOR e SPOT logo ao
+// (Petrobras: POLI RIO/LON1/LON2) ficam juntos, com EQUINOR e SPOT logo ao
 // lado. Quem não está na lista entra depois, na ordem que vier da API.
-const SECTOR_ORDER = ["ARM RIO", "LON1", "LON2", "EQUINOR", "SPOT", "MANUTENÇÃO", "PRIME OCEAN", "TPS"];
+const SECTOR_ORDER = ["POLI RIO", "LON1", "LON2", "EQUINOR", "SPOT", "MANUTENÇÃO", "PRIME OCEAN", "TPS"];
 
 function sortSectors(sectors: Sector[]): Sector[] {
   const rank = (name: string) => {
@@ -29,7 +29,7 @@ function sortSectors(sectors: Sector[]): Sector[] {
 // Só pra mostrar um cartão específico por grupo na tela de abertura; quem
 // autentica de verdade é usuário/senha, não esse rótulo.
 const DIRETORIA_GROUPS = [
-  { label: "Diretoria de Operações", contracts: "ARM RIO, TPS, SPOT, EQUINOR" },
+  { label: "Diretoria de Operações", contracts: "POLI RIO, TPS, SPOT, EQUINOR" },
   { label: "Diretoria LON1/LON2", contracts: "LON1, LON2" },
   { label: "Diretoria Prime Ocean", contracts: "PRIME OCEAN" },
 ];

@@ -22,7 +22,7 @@ export type AdminSessionData = {
   sectorId: number | null;
   sectorName: string | null;
   // Preenchido SÓ para Diretoria/Superintendência restrita a um GRUPO
-  // específico de Contratos (ex.: ARM RIO+TPS+SPOT+EQUINOR). null = sem
+  // específico de Contratos (ex.: POLI RIO+TPS+SPOT+EQUINOR). null = sem
   // grupo, enxerga todos os Contratos.
   sectorIds: number[] | null;
   // "admin" = super admin, edita tudo. "diretoria" e "superintendencia" veem

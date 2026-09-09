@@ -90,6 +90,24 @@ function Card({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function HighlightCard({
+  label,
+  name,
+  detail,
+}: {
+  label: string;
+  name: string | null;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-slate-900">{name ?? "—"}</p>
+      <p className="mt-0.5 text-xs text-slate-500">{detail}</p>
+    </div>
+  );
+}
+
 export default async function AdminDashboardPage() {
   // Gestor de contrato só pode ver os números do próprio Contrato; Diretoria/
   // Superintendência escopada a um grupo só vê os do grupo dela — admin
@@ -355,15 +373,44 @@ export default async function AdminDashboardPage() {
         </section>
       </div>
 
-      {admin?.role === "admin" && (
+      {(admin?.role === "admin" || admin?.role === "diretoria" || admin?.role === "superintendencia") && (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">
             Ranking Bronze / Prata / Ouro
           </h2>
           <p className="text-xs text-slate-500">
-            Visível só pra contas com permissão de admin geral — classifica pela nota média:
-            Bronze abaixo de 70%, Prata de 70% a 95%, Ouro acima de 95%.
+            Visível pra contas de admin geral e Diretoria/Superintendência — classifica pela nota
+            média: Bronze abaixo de 70%, Prata de 70% a 95%, Ouro acima de 95%.
           </p>
+
+          {(() => {
+            const evaluatedSectors = sectorSummary.filter((s) => s.attemptCount > 0);
+            const mostAttempts = [...evaluatedSectors].sort((a, b) => b.attemptCount - a.attemptCount)[0] ?? null;
+            const bestAvg = [...evaluatedSectors].sort((a, b) => b.avgScore - a.avgScore)[0] ?? null;
+            return (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <HighlightCard
+                  label="Contrato que mais fez provas"
+                  name={mostAttempts?.name ?? null}
+                  detail={
+                    mostAttempts
+                      ? `${mostAttempts.attemptCount} ${mostAttempts.attemptCount === 1 ? "tentativa" : "tentativas"} · média ${mostAttempts.avgScore}%`
+                      : "Ainda sem tentativas registradas."
+                  }
+                />
+                <HighlightCard
+                  label="Contrato com a melhor média"
+                  name={bestAvg?.name ?? null}
+                  detail={
+                    bestAvg
+                      ? `média ${bestAvg.avgScore}% · ${bestAvg.attemptCount} ${bestAvg.attemptCount === 1 ? "tentativa" : "tentativas"}`
+                      : "Ainda sem tentativas registradas."
+                  }
+                />
+              </div>
+            );
+          })()}
+
           <div className="mt-4 grid gap-6 sm:grid-cols-3">
             <TierRankColumn
               title="Por Contrato"
