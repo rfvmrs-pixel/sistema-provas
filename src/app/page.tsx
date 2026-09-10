@@ -600,7 +600,20 @@ export default function HomePage() {
                     máximo 10 minutos para ser respondida.
                   </p>
 
-                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="text-sm font-semibold text-slate-900">Minha área</h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Sem senha: informe seu nome e matrícula pra ver as provas que você já fez
+                        (onde acertou e errou), praticar e fazer prova oficial.
+                      </p>
+                      <Link
+                        href="/prova?mode=matricula"
+                        className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+                      >
+                        Entrar com matrícula
+                      </Link>
+                    </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
                       <h3 className="text-sm font-semibold text-slate-900">Simulado</h3>
                       <p className="mt-1 text-xs text-slate-500">

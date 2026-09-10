@@ -1,4 +1,4 @@
-import { and, avg, count, eq, gte, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, avg, count, eq, gte, ilike, inArray, isNotNull, lt, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { attempts, employees, sectors, roles, answers, questions, exams } from "@/db/schema";
 import { TENURE_OPTIONS, tenureLabel } from "@/lib/tenure";
@@ -375,14 +375,28 @@ export type TenureSummaryRow = {
   needsTraining: boolean;
 };
 
-// Desempenho agrupado por tempo de empresa (faixas fixas cadastradas no
-// autocadastro) — ajuda a ver se colaboradores mais novos de casa erram mais
-// que os veteranos.
+// Desempenho agrupado por tempo de empresa. Quando o funcionário tem data de
+// contratação cadastrada (hireDate), a faixa é calculada na hora a partir
+// dela — mesmos limites de lib/tenure.ts#tenureCodeFromHireDate — em vez de
+// depender de uma faixa fixa escolhida manualmente, então "atualiza sozinha"
+// conforme o tempo passa. Sem hireDate, cai no valor manual antigo
+// (autocadastro/importação em lote).
+const TENURE_CODE_EXPR = sql<string>`
+  case
+    when ${employees.hireDate} is null then ${employees.tempoDeEmpresa}
+    when (current_date - ${employees.hireDate}) < 182 then '0-6m'
+    when (current_date - ${employees.hireDate}) < 365 then '6m-1a'
+    when (current_date - ${employees.hireDate}) < 1095 then '1-3a'
+    when (current_date - ${employees.hireDate}) < 1825 then '3-5a'
+    else '5a+'
+  end
+`;
+
 export async function getTenureSummary(sectorIds?: number[]): Promise<TenureSummaryRow[]> {
   const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
   const rows = await db
     .select({
-      code: employees.tempoDeEmpresa,
+      code: TENURE_CODE_EXPR,
       avgScore: avg(attempts.percentage),
       attemptCount: count(attempts.id),
     })
@@ -392,7 +406,7 @@ export async function getTenureSummary(sectorIds?: number[]): Promise<TenureSumm
       and(eq(attempts.employeeId, employees.id), isNotNull(attempts.percentage)),
     )
     .where(scope)
-    .groupBy(employees.tempoDeEmpresa);
+    .groupBy(TENURE_CODE_EXPR);
 
   const order: (string | null)[] = [...TENURE_OPTIONS.map((o) => o.value), null];
   return rows
@@ -458,6 +472,73 @@ export async function getAttemptsByExam(examId: number) {
     .innerJoin(roles, eq(employees.roleId, roles.id))
     .where(eq(attempts.examId, examId))
     .orderBy(sql`${attempts.finishedAt} desc nulls last`);
+}
+
+export type AttemptFilters = {
+  // "YYYY-MM" — restringe a um mês inteiro.
+  month?: string;
+  // "YYYY-MM-DD" — restringe a um único dia (tem prioridade sobre `month` se
+  // os dois vierem preenchidos, já que é mais específico).
+  day?: string;
+  // Busca por nome do colaborador (parcial, sem diferenciar maiúsc./minúsc.).
+  name?: string;
+  roleId?: number;
+};
+
+// "Últimas tentativas" do Painel com filtros combináveis (mês, dia, nome do
+// colaborador, função) — cada filtro aplicado restringe mais a lista, igual a
+// um AND de todos os campos preenchidos. Usado pela tabela filtrável do
+// Painel (ver RecentAttemptsTable).
+export async function getFilteredAttempts(
+  sectorIds?: number[],
+  filters: AttemptFilters = {},
+  limit = 50,
+) {
+  const conditions: SQL[] = [isNotNull(attempts.finishedAt)];
+  if (sectorIds && sectorIds.length > 0) conditions.push(inArray(employees.sectorId, sectorIds));
+  if (filters.roleId) conditions.push(eq(employees.roleId, filters.roleId));
+  if (filters.name && filters.name.trim()) {
+    conditions.push(ilike(employees.name, `%${filters.name.trim()}%`));
+  }
+  if (filters.day) {
+    const start = new Date(`${filters.day}T00:00:00.000Z`);
+    if (!Number.isNaN(start.getTime())) {
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      conditions.push(gte(attempts.finishedAt, start));
+      conditions.push(lt(attempts.finishedAt, end));
+    }
+  } else if (filters.month) {
+    const start = new Date(`${filters.month}-01T00:00:00.000Z`);
+    if (!Number.isNaN(start.getTime())) {
+      const end = new Date(start.getTime());
+      end.setUTCMonth(end.getUTCMonth() + 1);
+      conditions.push(gte(attempts.finishedAt, start));
+      conditions.push(lt(attempts.finishedAt, end));
+    }
+  }
+
+  return db
+    .select({
+      id: attempts.id,
+      finishedAt: attempts.finishedAt,
+      percentage: attempts.percentage,
+      score: attempts.score,
+      totalQuestions: attempts.totalQuestions,
+      mode: attempts.mode,
+      sessionLabel: attempts.sessionLabel,
+      employeeName: employees.name,
+      sectorName: sectors.name,
+      roleName: roles.name,
+      examTitle: exams.title,
+    })
+    .from(attempts)
+    .innerJoin(employees, eq(attempts.employeeId, employees.id))
+    .innerJoin(sectors, eq(employees.sectorId, sectors.id))
+    .innerJoin(roles, eq(employees.roleId, roles.id))
+    .innerJoin(exams, eq(attempts.examId, exams.id))
+    .where(and(...conditions))
+    .orderBy(sql`${attempts.finishedAt} desc`)
+    .limit(limit);
 }
 
 export async function getRecentAttempts(limit = 30, sectorIds?: number[]) {

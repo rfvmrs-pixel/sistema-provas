@@ -98,8 +98,17 @@ export const employees = pgTable(
     // função existir) ficam com matrícula null, sem problema.
     matricula: varchar("matricula", { length: 50 }),
     // Faixa de tempo de empresa, pra alimentar as análises do painel:
-    // "0-6m" | "6m-1a" | "1-3a" | "3-5a" | "5a+"
+    // "0-6m" | "6m-1a" | "1-3a" | "3-5a" | "5a+". Só é usada de verdade quando
+    // hireDate (abaixo) é null (cadastro antigo/autocadastro/importação em
+    // lote) — quando hireDate existe, a faixa é sempre calculada na hora a
+    // partir dela (ver lib/tenure.ts), então esse campo fica "congelado" e não
+    // precisa ser mantido manualmente.
     tempoDeEmpresa: varchar("tempo_de_empresa", { length: 10 }),
+    // Data de contratação — quando preenchida, o tempo de empresa (faixa
+    // Bronze/Prata/Ouro por tempo de casa no Painel) é calculado
+    // automaticamente a partir dela (ver getTenureSummary em lib/reports.ts),
+    // em vez de depender de alguém escolher/atualizar a faixa manualmente.
+    hireDate: date("hire_date"),
     // ---- Código temporário de "prova do dia" ----
     // O gestor gera, para uma leva de colaboradores, um código de uso único
     // (login = nome + setor, senha = este código) válido só para UMA prova

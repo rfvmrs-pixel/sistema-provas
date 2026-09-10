@@ -66,7 +66,10 @@ export default function ProvaPage() {
   const [sectorId, setSectorId] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
-  const [useCode, setUseCode] = useState(false);
+  const [matricula, setMatricula] = useState("");
+  // "senha" (login pessoal) | "codigo" (código de uso único da prova do dia)
+  // | "matricula" (acesso rápido só com nome + matrícula, sem senha).
+  const [loginMethod, setLoginMethod] = useState<"senha" | "codigo" | "matricula">("senha");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [exams, setExams] = useState<ExamListItem[]>([]);
   const [busy, setBusy] = useState(false);
@@ -75,15 +78,22 @@ export default function ProvaPage() {
     fetch("/api/public/sectors")
       .then((r) => r.json())
       .then((d) => setSectors(d.sectors ?? []));
+    // ?mode=matricula pré-seleciona o acesso por matrícula — usado pelo cartão
+    // "Minha área" da tela de abertura, que já leva direto pra esse método.
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("mode") === "matricula") setLoginMethod("matricula");
+    }
   }, []);
 
-  async function loadExams(): Promise<{ mode: Mode; exams: ExamListItem[] }> {
+  async function loadExams(): Promise<{ mode: Mode; exams: ExamListItem[]; employeeName: string }> {
     const res = await fetch("/api/employee/exams");
     const data = await res.json();
     const list: ExamListItem[] = res.ok ? data.exams ?? [] : [];
     const mode: Mode = data.employee?.mode === "oficial" ? "oficial" : "simulado";
+    const employeeName: string = data.employee?.name || name;
     setExams(list);
-    return { mode, exams: list };
+    return { mode, exams: list, employeeName };
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -91,28 +101,30 @@ export default function ProvaPage() {
     setLoginError(null);
     setBusy(true);
     try {
+      const payload =
+        loginMethod === "codigo"
+          ? { name, sectorId: Number(sectorId), code }
+          : loginMethod === "matricula"
+            ? { name, sectorId: Number(sectorId), matricula }
+            : { name, sectorId: Number(sectorId), password };
       const res = await fetch("/api/employee/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          useCode
-            ? { name, sectorId: Number(sectorId), code }
-            : { name, sectorId: Number(sectorId), password },
-        ),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
         setLoginError(data.error || "Falha ao entrar.");
         return;
       }
-      const { mode, exams: list } = await loadExams();
+      const { mode, exams: list, employeeName } = await loadExams();
       // Prova do dia: já vem travada em uma única prova, então pula direto
       // pra ela em vez de mostrar uma lista de 1 item.
       if (mode === "oficial" && list.length === 1) {
         await startExam(list[0].id, list[0].title, mode);
         return;
       }
-      setStep({ kind: "list", employeeName: name, mode });
+      setStep({ kind: "list", employeeName, mode });
     } finally {
       setBusy(false);
     }
@@ -141,8 +153,8 @@ export default function ProvaPage() {
   }
 
   async function backToList() {
-    const { mode } = await loadExams();
-    setStep({ kind: "list", employeeName: name, mode });
+    const { mode, employeeName } = await loadExams();
+    setStep({ kind: "list", employeeName, mode });
   }
 
   async function openMyExams(employeeName: string, mode: Mode) {
@@ -194,12 +206,14 @@ export default function ProvaPage() {
 
             <div className="mt-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Nome completo</label>
+                <label className="block text-sm font-medium text-slate-700">
+                  Nome completo {loginMethod === "matricula" && <span className="font-normal text-slate-400">(opcional)</span>}
+                </label>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-                  required
+                  required={loginMethod !== "matricula"}
                 />
               </div>
               <div>
@@ -219,23 +233,53 @@ export default function ProvaPage() {
                 </select>
               </div>
               <div>
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-medium text-slate-700">
-                    {useCode ? "Código da prova do dia" : "Senha"}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUseCode((v) => !v);
-                      setPassword("");
-                      setCode("");
-                    }}
-                    className="text-xs text-slate-500 underline"
-                  >
-                    {useCode ? "usar minha senha" : "tenho um código de prova do dia"}
-                  </button>
+                <label className="block text-sm font-medium text-slate-700">Como você vai entrar?</label>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      { value: "senha", label: "Minha senha" },
+                      { value: "matricula", label: "Nome + matrícula" },
+                      { value: "codigo", label: "Código da prova do dia" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setLoginMethod(opt.value);
+                        setPassword("");
+                        setCode("");
+                        setMatricula("");
+                      }}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                        loginMethod === opt.value
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
-                {useCode ? (
+              </div>
+              {loginMethod === "matricula" && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">Matrícula</label>
+                  <input
+                    value={matricula}
+                    onChange={(e) => setMatricula(e.target.value)}
+                    placeholder="Sua matrícula"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                    required
+                  />
+                  <p className="mt-1 text-xs text-slate-400">
+                    Sem senha — dá pra ver suas provas já feitas, praticar e fazer prova oficial.
+                  </p>
+                </div>
+              )}
+              {loginMethod === "codigo" && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">Código da prova do dia</label>
                   <input
                     inputMode="numeric"
                     value={code}
@@ -244,7 +288,11 @@ export default function ProvaPage() {
                     className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm tracking-widest focus:border-slate-500 focus:outline-none"
                     required
                   />
-                ) : (
+                </div>
+              )}
+              {loginMethod === "senha" && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">Senha</label>
                   <input
                     type="password"
                     value={password}
@@ -252,8 +300,8 @@ export default function ProvaPage() {
                     className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
                     required
                   />
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {loginError && <p className="mt-4 text-sm text-red-600">{loginError}</p>}

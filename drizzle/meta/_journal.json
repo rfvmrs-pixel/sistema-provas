@@ -120,6 +120,13 @@
       "when": 1788996855610,
       "tag": "0016_rename_arm_rio_to_poli_rio",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788998367594,
+      "tag": "0017_add_employee_hire_date",
+      "breakpoints": true
     }
   ]
 }

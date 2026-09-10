@@ -24,6 +24,7 @@ export async function GET() {
       roleName: roles.name,
       matricula: employees.matricula,
       tempoDeEmpresa: employees.tempoDeEmpresa,
+      hireDate: employees.hireDate,
     })
     .from(employees)
     .innerJoin(sectors, eq(employees.sectorId, sectors.id))
@@ -44,6 +45,10 @@ export async function POST(request: NextRequest) {
   const roleId = Number(body?.roleId);
   const password = body?.password?.toString();
   const matricula = body?.matricula?.toString().trim() || null;
+  // Data de contratação (opcional) — quando informada, o tempo de empresa
+  // passa a ser calculado sozinho a partir dela (ver lib/tenure.ts), sem
+  // precisar escolher/atualizar uma faixa manualmente.
+  const hireDate = body?.hireDate?.toString().trim() || null;
 
   if (!name || !sectorId || !roleId || !password) {
     return NextResponse.json(
@@ -65,7 +70,7 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(password);
     const [created] = await db
       .insert(employees)
-      .values({ name, sectorId, roleId, passwordHash, matricula })
+      .values({ name, sectorId, roleId, passwordHash, matricula, hireDate })
       .returning();
     return NextResponse.json({ employee: created }, { status: 201 });
   } catch {

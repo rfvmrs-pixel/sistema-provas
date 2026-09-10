@@ -17,6 +17,7 @@ import { MeterBarList } from "@/components/charts/MeterBar";
 import { BarChart } from "@/components/charts/BarChart";
 import { TrendLineChart } from "@/components/charts/TrendLineChart";
 import { RoleEmployeeDrilldown } from "@/components/dashboard/RoleEmployeeDrilldown";
+import { RecentAttemptsTable } from "@/components/dashboard/RecentAttemptsTable";
 
 const TIER_ORDER: EmployeeTier[] = ["ouro", "prata", "bronze"];
 const TIER_INFO: Record<EmployeeTier, { label: string; emoji: string; className: string }> = {
@@ -428,46 +429,13 @@ export default async function AdminDashboardPage() {
         </section>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-slate-900">Últimas tentativas</h2>
-        <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-slate-500">
-              <th className="pb-2">Funcionário</th>
-              <th className="pb-2">Setor</th>
-              <th className="pb-2">Função</th>
-              <th className="pb-2">Prova</th>
-              <th className="pb-2">Data</th>
-              <th className="pb-2">Nota</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentAttempts.length === 0 && (
-              <tr>
-                <td className="py-3 text-slate-400" colSpan={6}>
-                  Nenhuma prova respondida ainda.
-                </td>
-              </tr>
-            )}
-            {recentAttempts.map((a) => (
-              <tr key={a.id} className="border-t border-slate-100">
-                <td className="py-2 text-slate-800">{a.employeeName}</td>
-                <td className="py-2 text-slate-500">{a.sectorName}</td>
-                <td className="py-2 text-slate-500">{a.roleName}</td>
-                <td className="py-2 text-slate-500">{a.examTitle}</td>
-                <td className="py-2 text-slate-500">
-                  {a.finishedAt ? new Date(a.finishedAt).toLocaleString("pt-BR") : "-"}
-                </td>
-                <td className="py-2">
-                  <ScoreBadge value={a.percentage ?? 0} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      </section>
+      <RecentAttemptsTable
+        initialAttempts={recentAttempts.map((a) => ({
+          ...a,
+          finishedAt: a.finishedAt ? a.finishedAt.toISOString() : null,
+        }))}
+        roles={roleSummary.map((r) => ({ id: r.id, name: r.name }))}
+      />
     </div>
   );
 }

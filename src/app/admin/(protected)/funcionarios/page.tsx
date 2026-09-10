@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useIsReadOnlyAdmin } from "../AdminRoleContext";
-import { tenureLabel } from "@/lib/tenure";
+import { tenureLabel, effectiveTenureCode } from "@/lib/tenure";
 
 type Sector = { id: number; name: string };
 type Role = { id: number; name: string };
@@ -16,6 +16,7 @@ type Employee = {
   roleName: string;
   matricula: string | null;
   tempoDeEmpresa: string | null;
+  hireDate: string | null;
 };
 type EmployeeScore = { id: number; avgScore: number; attemptCount: number };
 type ImportResult = { created: number; updated: number; errors: { row: number; message: string }[]; totalRows: number };
@@ -34,6 +35,8 @@ export default function FuncionariosPage() {
   const [sectorId, setSectorId] = useState("");
   const [roleId, setRoleId] = useState("");
   const [password, setPassword] = useState("");
+  const [hireDate, setHireDate] = useState("");
+  const [savingHireDateFor, setSavingHireDateFor] = useState<number | null>(null);
 
   const [importBusy, setImportBusy] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -80,6 +83,7 @@ export default function FuncionariosPage() {
         roleId: Number(roleId),
         password,
         matricula: matricula || undefined,
+        hireDate: hireDate || undefined,
       }),
     });
     const data = await res.json();
@@ -90,7 +94,29 @@ export default function FuncionariosPage() {
     setName("");
     setMatricula("");
     setPassword("");
+    setHireDate("");
     load();
+  }
+
+  // Data de contratação editada direto na tabela — o tempo de empresa (coluna
+  // ao lado) passa a ser calculado sozinho a partir dela dali em diante.
+  async function handleUpdateHireDate(emp: Employee, value: string) {
+    setSavingHireDateFor(emp.id);
+    try {
+      const res = await fetch(`/api/admin/employees/${emp.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hireDate: value || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Falha ao salvar a data de contratação.");
+        return;
+      }
+      load();
+    } finally {
+      setSavingHireDateFor(null);
+    }
   }
 
   async function toggleActive(emp: Employee) {
@@ -253,7 +279,16 @@ export default function FuncionariosPage() {
             className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
             required
           />
-          <button className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 sm:col-span-6">
+          <label className="flex flex-col gap-1 text-xs text-slate-500">
+            Data de contratação (opcional)
+            <input
+              type="date"
+              value={hireDate}
+              onChange={(e) => setHireDate(e.target.value)}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-slate-500 focus:outline-none"
+            />
+          </label>
+          <button className="self-end rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 sm:col-span-6">
             Adicionar funcionário
           </button>
         </form>
@@ -268,6 +303,7 @@ export default function FuncionariosPage() {
               <th className="px-5 py-3">Matrícula</th>
               <th className="px-5 py-3">Setor</th>
               <th className="px-5 py-3">Função</th>
+              <th className="px-5 py-3">Data de contratação</th>
               <th className="px-5 py-3">Tempo de empresa</th>
               <th className="px-5 py-3">Média</th>
               <th className="px-5 py-3">Status</th>
@@ -277,13 +313,13 @@ export default function FuncionariosPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-5 py-4 text-slate-400" colSpan={8}>
+                <td className="px-5 py-4 text-slate-400" colSpan={9}>
                   Carregando...
                 </td>
               </tr>
             ) : employees.length === 0 ? (
               <tr>
-                <td className="px-5 py-4 text-slate-400" colSpan={8}>
+                <td className="px-5 py-4 text-slate-400" colSpan={9}>
                   Nenhum funcionário cadastrado.
                 </td>
               </tr>
@@ -296,7 +332,22 @@ export default function FuncionariosPage() {
                     <td className="px-5 py-3 text-slate-500">{emp.matricula || "—"}</td>
                     <td className="px-5 py-3 text-slate-500">{emp.sectorName}</td>
                     <td className="px-5 py-3 text-slate-500">{emp.roleName}</td>
-                    <td className="px-5 py-3 text-slate-500">{tenureLabel(emp.tempoDeEmpresa)}</td>
+                    <td className="px-5 py-3 text-slate-500">
+                      <input
+                        type="date"
+                        defaultValue={emp.hireDate ?? ""}
+                        disabled={isReadOnly || savingHireDateFor === emp.id}
+                        onBlur={(e) => {
+                          if (e.target.value !== (emp.hireDate ?? "")) {
+                            handleUpdateHireDate(emp, e.target.value);
+                          }
+                        }}
+                        className="w-36 rounded-md border border-slate-300 px-2 py-1 text-xs focus:border-slate-500 focus:outline-none disabled:bg-slate-50"
+                      />
+                    </td>
+                    <td className="px-5 py-3 text-slate-500">
+                      {tenureLabel(effectiveTenureCode(emp))}
+                    </td>
                     <td className="px-5 py-3 text-slate-500">
                       {score && score.attemptCount > 0 ? `${score.avgScore}% (${score.attemptCount})` : "—"}
                     </td>
