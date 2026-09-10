@@ -541,6 +541,197 @@ export async function getFilteredAttempts(
     .limit(limit);
 }
 
+export type PresentationFilters = {
+  // "YYYY-MM" — restringe a um mês inteiro.
+  month?: string;
+  roleIds?: number[];
+  // Subconjunto de "IT" | "APR" | "MANUAL".
+  documentTypes?: string[];
+};
+
+export type PresentationGroupRow = { id: number; name: string; avgScore: number; attemptCount: number };
+export type PresentationDocTypeRow = { documentType: string; avgScore: number; attemptCount: number };
+export type PresentationTopicRow = { topic: string; accuracy: number; totalAnswers: number };
+
+export type PresentationData = {
+  totalAttempts: number;
+  avgScore: number;
+  approvalRate: number; // % de tentativas com nota >= passingScore da prova
+  employeesEvaluated: number;
+  tierCounts: { bronze: number; prata: number; ouro: number };
+  bySector: PresentationGroupRow[];
+  byRole: PresentationGroupRow[];
+  byDocumentType: PresentationDocTypeRow[];
+  bestTopics: PresentationTopicRow[];
+  worstTopics: PresentationTopicRow[];
+};
+
+// Condições comuns a todas as consultas da Apresentação — sempre join em
+// employees (Contrato/Função) e exams (tipo de documento), pra poder filtrar
+// por qualquer combinação de mês/função/tipo, além do Contrato de sempre.
+function presentationConditions(sectorIds: number[] | undefined, filters: PresentationFilters): SQL[] {
+  const conditions: SQL[] = [isNotNull(attempts.percentage)];
+  if (sectorIds && sectorIds.length > 0) conditions.push(inArray(employees.sectorId, sectorIds));
+  if (filters.roleIds && filters.roleIds.length > 0) conditions.push(inArray(employees.roleId, filters.roleIds));
+  if (filters.documentTypes && filters.documentTypes.length > 0) {
+    conditions.push(inArray(exams.documentType, filters.documentTypes));
+  }
+  if (filters.month) {
+    const start = new Date(`${filters.month}-01T00:00:00.000Z`);
+    if (!Number.isNaN(start.getTime())) {
+      const end = new Date(start.getTime());
+      end.setUTCMonth(end.getUTCMonth() + 1);
+      conditions.push(gte(attempts.finishedAt, start));
+      conditions.push(lt(attempts.finishedAt, end));
+    }
+  }
+  return conditions;
+}
+
+// Dados agregados pra aba "Apresentação": números gerais, distribuição
+// Bronze/Prata/Ouro, comparativos por Contrato/Função/tipo de documento e os
+// temas com melhor/pior desempenho — tudo já filtrado por
+// Contrato(s)/mês/função(ões)/tipo(s) de documento escolhidos no formulário.
+export async function getPresentationSummary(
+  sectorIds: number[] | undefined,
+  filters: PresentationFilters = {},
+): Promise<PresentationData> {
+  const conditions = presentationConditions(sectorIds, filters);
+  const where = and(...conditions);
+
+  const [totalsRow] = await db
+    .select({
+      totalAttempts: count(attempts.id),
+      avgScore: avg(attempts.percentage),
+      approvedCount:
+        sql<number>`sum(case when ${attempts.percentage} >= ${exams.passingScore} then 1 else 0 end)`.mapWith(
+          Number,
+        ),
+      employeesEvaluated: sql<number>`count(distinct ${attempts.employeeId})`.mapWith(Number),
+    })
+    .from(attempts)
+    .innerJoin(exams, eq(attempts.examId, exams.id))
+    .innerJoin(employees, eq(attempts.employeeId, employees.id))
+    .where(where);
+
+  const totalAttempts = Number(totalsRow?.totalAttempts ?? 0);
+  const avgScore = round(totalsRow?.avgScore ?? null);
+  const approvedCount = Number(totalsRow?.approvedCount ?? 0);
+  const approvalRate = totalAttempts > 0 ? Math.round((approvedCount / totalAttempts) * 100) : 0;
+  const employeesEvaluated = Number(totalsRow?.employeesEvaluated ?? 0);
+
+  const [employeeAvgRows, sectorRows, roleRows, docTypeRows, topicRows] = await Promise.all([
+    db
+      .select({ employeeId: employees.id, avgScore: avg(attempts.percentage) })
+      .from(attempts)
+      .innerJoin(exams, eq(attempts.examId, exams.id))
+      .innerJoin(employees, eq(attempts.employeeId, employees.id))
+      .where(where)
+      .groupBy(employees.id),
+    db
+      .select({
+        id: sectors.id,
+        name: sectors.name,
+        avgScore: avg(attempts.percentage),
+        attemptCount: count(attempts.id),
+      })
+      .from(attempts)
+      .innerJoin(exams, eq(attempts.examId, exams.id))
+      .innerJoin(employees, eq(attempts.employeeId, employees.id))
+      .innerJoin(sectors, eq(employees.sectorId, sectors.id))
+      .where(where)
+      .groupBy(sectors.id, sectors.name)
+      .orderBy(sectors.name),
+    db
+      .select({
+        id: roles.id,
+        name: roles.name,
+        avgScore: avg(attempts.percentage),
+        attemptCount: count(attempts.id),
+      })
+      .from(attempts)
+      .innerJoin(exams, eq(attempts.examId, exams.id))
+      .innerJoin(employees, eq(attempts.employeeId, employees.id))
+      .innerJoin(roles, eq(employees.roleId, roles.id))
+      .where(where)
+      .groupBy(roles.id, roles.name)
+      .orderBy(roles.name),
+    db
+      .select({
+        documentType: exams.documentType,
+        avgScore: avg(attempts.percentage),
+        attemptCount: count(attempts.id),
+      })
+      .from(attempts)
+      .innerJoin(exams, eq(attempts.examId, exams.id))
+      .innerJoin(employees, eq(attempts.employeeId, employees.id))
+      .where(where)
+      .groupBy(exams.documentType)
+      .orderBy(exams.documentType),
+    db
+      .select({
+        topic: questions.topic,
+        totalAnswers: count(answers.id),
+        correctAnswers: sql<number>`sum(case when ${answers.correct} then 1 else 0 end)`.mapWith(Number),
+      })
+      .from(answers)
+      .innerJoin(questions, eq(answers.questionId, questions.id))
+      .innerJoin(attempts, eq(answers.attemptId, attempts.id))
+      .innerJoin(exams, eq(attempts.examId, exams.id))
+      .innerJoin(employees, eq(attempts.employeeId, employees.id))
+      .where(where)
+      .groupBy(questions.topic),
+  ]);
+
+  const tierCounts = { bronze: 0, prata: 0, ouro: 0 };
+  for (const r of employeeAvgRows) {
+    tierCounts[employeeTier(round(r.avgScore))]++;
+  }
+
+  const bySector: PresentationGroupRow[] = sectorRows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    avgScore: round(r.avgScore),
+    attemptCount: Number(r.attemptCount),
+  }));
+
+  const byRole: PresentationGroupRow[] = roleRows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    avgScore: round(r.avgScore),
+    attemptCount: Number(r.attemptCount),
+  }));
+
+  const byDocumentType: PresentationDocTypeRow[] = docTypeRows.map((r) => ({
+    documentType: r.documentType,
+    avgScore: round(r.avgScore),
+    attemptCount: Number(r.attemptCount),
+  }));
+
+  const topics: PresentationTopicRow[] = topicRows
+    .filter((r) => r.topic)
+    .map((r) => ({
+      topic: r.topic as string,
+      accuracy: r.totalAnswers > 0 ? Math.round((r.correctAnswers / r.totalAnswers) * 100) : 0,
+      totalAnswers: Number(r.totalAnswers),
+    }));
+  const worstTopics = [...topics].sort((a, b) => a.accuracy - b.accuracy).slice(0, 3);
+  const bestTopics = [...topics].sort((a, b) => b.accuracy - a.accuracy).slice(0, 3);
+
+  return {
+    totalAttempts,
+    avgScore,
+    approvalRate,
+    employeesEvaluated,
+    tierCounts,
+    bySector,
+    byRole,
+    byDocumentType,
+    bestTopics,
+    worstTopics,
+  };
+}
+
 export async function getRecentAttempts(limit = 30, sectorIds?: number[]) {
   const conditions: SQL[] = [isNotNull(attempts.finishedAt)];
   if (sectorIds && sectorIds.length > 0) conditions.push(inArray(employees.sectorId, sectorIds));
