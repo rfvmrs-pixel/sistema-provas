@@ -56,6 +56,14 @@ export function AdminHeader({
         </div>
 
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
+          
+            href="https://claude.ai/code/artifact/3385be54-5863-4806-ba9e-e1f62560ee11"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+          >
+            <span aria-hidden="true">←</span> Central Triunfo
+          </a>
           <span className="text-sm text-slate-500">
             {username}
             {isAdmin && <span className="ml-1.5 text-xs text-slate-400">(admin geral)</span>}
@@ -107,6 +115,14 @@ export function AdminHeader({
             </span>
             <LogoutButton />
           </div>
+          
+            href="https://claude.ai/code/artifact/3385be54-5863-4806-ba9e-e1f62560ee11"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 flex items-center justify-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+          >
+            <span aria-hidden="true">←</span> Central Triunfo
+          </a>
           {isReadOnly && (
             <p className="mt-2 text-xs font-medium text-amber-700">{readOnlyLabel} · somente leitura</p>
           )}
