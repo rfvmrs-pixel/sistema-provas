@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   getSectorSummary,
   getRoleSummary,
@@ -8,12 +9,17 @@ import {
   getScoreTrend,
   getAvgDurationMinutes,
   getTenureSummary,
+  getAvailableAttemptYears,
+  getAttemptsCountByMonth,
+  getSectorScoreForPeriod,
+  MONTH_LABELS,
 } from "@/lib/reports";
 import { getAdminSession } from "@/lib/session";
 import { getVisibleSectorIds } from "@/lib/requireAdmin";
 import { MeterBarList } from "@/components/charts/MeterBar";
 import { BarChart } from "@/components/charts/BarChart";
 import { TrendLineChart } from "@/components/charts/TrendLineChart";
+import { MonthlyBarChart } from "@/components/charts/MonthlyBarChart";
 
 function ScoreBadge({ value }: { value: number }) {
   const color =
@@ -38,12 +44,24 @@ function Card({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ano?: string; mes?: string }>;
+}) {
   // Gestor de contrato só pode ver os números do próprio Contrato; Diretoria/
   // Superintendência escopada a um grupo só vê os do grupo dela — admin
   // geral e Diretoria/Superintendência sem grupo definido veem a empresa toda.
   const admin = await getAdminSession();
   const sectorIds = admin ? getVisibleSectorIds(admin) : undefined;
+
+  const sp = await searchParams;
+  const availableYears = await getAvailableAttemptYears(sectorIds);
+  const currentYear = new Date().getFullYear();
+  const requestedYear = sp.ano ? parseInt(sp.ano, 10) : currentYear;
+  const selectedYear = availableYears.includes(requestedYear) ? requestedYear : (availableYears[0] ?? currentYear);
+  const requestedMonth = sp.mes ? parseInt(sp.mes, 10) : NaN;
+  const selectedMonth = requestedMonth >= 1 && requestedMonth <= 12 ? requestedMonth : undefined;
 
   const [
     sectorSummary,
@@ -55,6 +73,9 @@ export default async function AdminDashboardPage() {
     scoreTrend,
     avgDurationMinutes,
     tenureSummary,
+    examsPerMonth,
+    simuladosPerMonth,
+    sectorScoreForPeriod,
   ] = await Promise.all([
     getSectorSummary(sectorIds),
     getRoleSummary(sectorIds),
@@ -65,7 +86,14 @@ export default async function AdminDashboardPage() {
     getScoreTrend(30, sectorIds),
     getAvgDurationMinutes(sectorIds),
     getTenureSummary(sectorIds),
+    getAttemptsCountByMonth("oficial", selectedYear, sectorIds),
+    getAttemptsCountByMonth("simulado", selectedYear, sectorIds),
+    getSectorScoreForPeriod(selectedYear, selectedMonth, sectorIds),
   ]);
+
+  const periodLabel = selectedMonth
+    ? `${MONTH_LABELS[selectedMonth - 1]}/${selectedYear}`
+    : `ano de ${selectedYear}`;
 
   const totalAttempts = employeeSummary.reduce((acc, e) => acc + e.attemptCount, 0);
   const evaluated = employeeSummary.filter((e) => e.attemptCount > 0);
@@ -96,6 +124,99 @@ export default async function AdminDashboardPage() {
         <Card label="Precisam de treinamento" value={employeesNeedingTraining.length} />
         <Card label="Tempo médio de prova" value={avgDurationMinutes > 0 ? `${avgDurationMinutes} min` : "—"} />
       </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-sm font-semibold text-slate-900">Filtro de período</h2>
+        <p className="text-xs text-slate-500">
+          Ano e mês afetam os gráficos mensais e a média por contrato logo abaixo — o resto do
+          Painel continua mostrando o histórico completo.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">Ano:</span>
+          {availableYears.map((y) => (
+            <Link
+              key={y}
+              href={`/admin${selectedMonth ? `?ano=${y}&mes=${selectedMonth}` : `?ano=${y}`}`}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                y === selectedYear ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {y}
+            </Link>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">Mês:</span>
+          <Link
+            href={`/admin?ano=${selectedYear}`}
+            className={`rounded-full px-3 py-1 text-xs font-medium ${
+              !selectedMonth ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            Todos
+          </Link>
+          {MONTH_LABELS.map((label, i) => (
+            <Link
+              key={label}
+              href={`/admin?ano=${selectedYear}&mes=${i + 1}`}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                selectedMonth === i + 1 ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Provas aplicadas por mês</h2>
+          <p className="text-xs text-slate-500">
+            Tentativas oficiais (código de &quot;prova do dia&quot; ou link de aplicação) em {selectedYear}.
+          </p>
+          <div className="mt-4">
+            <MonthlyBarChart
+              data={examsPerMonth.map((m) => ({ label: m.label, value: m.count }))}
+              emptyMessage="Nenhuma prova aplicada nesse ano."
+            />
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Simulados avulsos por mês</h2>
+          <p className="text-xs text-slate-500">
+            Testes que os próprios colaboradores fizeram por conta própria, logados com a senha
+            deles, em {selectedYear}.
+          </p>
+          <div className="mt-4">
+            <MonthlyBarChart
+              data={simuladosPerMonth.map((m) => ({ label: m.label, value: m.count }))}
+              emptyMessage="Nenhum simulado avulso nesse ano."
+              color="#8b5cf6"
+            />
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-sm font-semibold text-slate-900">Média de notas por contrato — {periodLabel}</h2>
+        <p className="text-xs text-slate-500">
+          Média de todas as tentativas concluídas no período selecionado no filtro acima, por
+          Contrato.
+        </p>
+        <div className="mt-4">
+          <BarChart
+            emptyMessage="Nenhum contrato cadastrado."
+            items={sectorScoreForPeriod.map((s) => ({
+              id: s.id,
+              label: s.name,
+              value: s.avgScore,
+              sublabel: `${s.attemptCount} ${s.attemptCount === 1 ? "tentativa" : "tentativas"}`,
+            }))}
+          />
+        </div>
+      </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-slate-900">Tendência da média geral</h2>

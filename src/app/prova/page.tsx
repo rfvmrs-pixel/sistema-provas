@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ExamRunner } from "@/components/exam/ExamRunner";
 
 type Sector = { id: number; name: string };
@@ -112,6 +113,15 @@ export default function ProvaPage() {
   return (
     <div className="flex flex-1 justify-center bg-slate-50 px-6 py-10">
       <div className="w-full max-w-2xl">
+        {step.kind !== "taking" && (
+          <Link
+            href="/"
+            className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+          >
+            ← Voltar
+          </Link>
+        )}
+
         {step.kind === "login" && (
           <form
             onSubmit={handleLogin}

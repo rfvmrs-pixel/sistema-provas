@@ -364,6 +364,108 @@ export async function getAttemptsByExam(examId: number) {
     .orderBy(sql`${attempts.finishedAt} desc nulls last`);
 }
 
+// ---------- Filtros de período (ano/mês) do Painel ----------
+export const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+// Anos com pelo menos 1 tentativa concluída, mais recente primeiro — usado
+// pra montar o filtro de Ano no Painel. O ano atual sempre aparece, mesmo
+// sem dados ainda, pra o filtro nunca vir vazio.
+export async function getAvailableAttemptYears(sectorIds?: number[]): Promise<number[]> {
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
+  const yearExpr = sql<number>`extract(year from ${attempts.finishedAt})::int`;
+  const rows = await db
+    .selectDistinct({ year: yearExpr })
+    .from(attempts)
+    .innerJoin(employees, eq(attempts.employeeId, employees.id))
+    .where(and(isNotNull(attempts.finishedAt), scope));
+
+  const years = new Set(rows.map((r) => Number(r.year)));
+  years.add(new Date().getFullYear());
+  return Array.from(years).sort((a, b) => b - a);
+}
+
+export type MonthlyCountRow = { month: string; label: string; count: number };
+
+// Quantidade de tentativas por mês num ano específico, filtrada por `mode`:
+// "oficial" = provas aplicadas de verdade (código de "prova do dia" ou link
+// de aplicação); "simulado" = prática livre que o próprio colaborador
+// iniciou com a senha dele. Sempre retorna os 12 meses do ano (com 0 onde
+// não houve tentativas), pra o gráfico não "pular" meses sem dado.
+export async function getAttemptsCountByMonth(
+  mode: "oficial" | "simulado",
+  year: number,
+  sectorIds?: number[],
+): Promise<MonthlyCountRow[]> {
+  const scope = sectorIds && sectorIds.length > 0 ? inArray(employees.sectorId, sectorIds) : undefined;
+  const monthExpr = sql<string>`to_char(${attempts.finishedAt}, 'YYYY-MM')`;
+
+  const rows = await db
+    .select({
+      month: monthExpr,
+      count: count(attempts.id),
+    })
+    .from(attempts)
+    .innerJoin(employees, eq(attempts.employeeId, employees.id))
+    .where(
+      and(
+        eq(attempts.mode, mode),
+        isNotNull(attempts.finishedAt),
+        sql`extract(year from ${attempts.finishedAt}) = ${year}`,
+        scope,
+      ),
+    )
+    .groupBy(monthExpr);
+
+  const byMonth = new Map(rows.map((r) => [r.month, Number(r.count)]));
+  return Array.from({ length: 12 }, (_, i) => {
+    const key = `${year}-${String(i + 1).padStart(2, "0")}`;
+    return { month: key, label: MONTH_LABELS[i], count: byMonth.get(key) ?? 0 };
+  });
+}
+
+export type SectorPeriodAvgRow = { id: number; name: string; avgScore: number; attemptCount: number };
+
+// Média de nota por Contrato (Setor) no período selecionado: o ano inteiro,
+// ou um único mês dentro dele quando `month` (1-12) é informado. Mesmo
+// formato de getSectorSummary (pra reaproveitar o BarChart existente), só
+// que escopado ao período escolhido no filtro do Painel em vez de
+// "desde sempre".
+export async function getSectorScoreForPeriod(
+  year: number,
+  month: number | undefined,
+  sectorIds?: number[],
+): Promise<SectorPeriodAvgRow[]> {
+  const scopeSector = sectorIds && sectorIds.length > 0 ? inArray(sectors.id, sectorIds) : undefined;
+  const periodCond =
+    month && month >= 1 && month <= 12
+      ? sql`to_char(${attempts.finishedAt}, 'YYYY-MM') = ${`${year}-${String(month).padStart(2, "0")}`}`
+      : sql`extract(year from ${attempts.finishedAt}) = ${year}`;
+
+  const rows = await db
+    .select({
+      id: sectors.id,
+      name: sectors.name,
+      avgScore: avg(attempts.percentage),
+      attemptCount: count(attempts.id),
+    })
+    .from(sectors)
+    .leftJoin(employees, eq(employees.sectorId, sectors.id))
+    .leftJoin(
+      attempts,
+      and(eq(attempts.employeeId, employees.id), isNotNull(attempts.percentage), periodCond),
+    )
+    .where(scopeSector)
+    .groupBy(sectors.id, sectors.name)
+    .orderBy(sectors.name);
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    avgScore: round(r.avgScore),
+    attemptCount: Number(r.attemptCount),
+  }));
+}
+
 export async function getRecentAttempts(limit = 30, sectorIds?: number[]) {
   const conditions: SQL[] = [isNotNull(attempts.finishedAt)];
   if (sectorIds && sectorIds.length > 0) conditions.push(inArray(employees.sectorId, sectorIds));
