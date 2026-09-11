@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 type Sector = { id: number; name: string };
-type Gestor = { id: number; username: string };
+type Gestor = { id: number; username: string; role?: string };
 type DirectorRole = "diretoria" | "superintendencia";
 type Director = {
   id: number;
@@ -23,7 +23,10 @@ export default function ContratosPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingGestorFor, setSavingGestorFor] = useState<number | null>(null);
-  const [gestorForm, setGestorForm] = useState<Record<number, { username: string; password: string }>>({});
+  const [gestorForm, setGestorForm] = useState<
+    Record<number, { username: string; password: string; fullAccess: boolean }>
+  >({});
+  const [gestorNotice, setGestorNotice] = useState<Record<number, string>>({});
 
   // Conta(s) de Diretoria/Superintendência: enxergam todos os Contratos e as
   // estatísticas da empresa, mas são só leitura (não editam nada). Os dois
@@ -38,8 +41,61 @@ export default function ContratosPage() {
   const [savingDirector, setSavingDirector] = useState(false);
   const [directorError, setDirectorError] = useState<string | null>(null);
 
+  // Editar senha de uma conta de Diretoria/Superintendência já existente —
+  // qual conta está com o formulário de senha aberto, o valor digitado, e
+  // estado de salvando/erro por conta (igual ao padrão do gestorForm acima).
+  const [editingPasswordFor, setEditingPasswordFor] = useState<number | null>(null);
+  const [editPasswordValue, setEditPasswordValue] = useState("");
+  const [savingPasswordFor, setSavingPasswordFor] = useState<number | null>(null);
+  const [passwordNotice, setPasswordNotice] = useState<Record<number, string>>({});
+  const [deletingDirectorId, setDeletingDirectorId] = useState<number | null>(null);
+
   function toggleDirectorSector(id: number) {
     setDirectorSectorIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function openPasswordEditor(id: number) {
+    setEditingPasswordFor(id);
+    setEditPasswordValue("");
+    setPasswordNotice((m) => ({ ...m, [id]: "" }));
+  }
+
+  async function handleSaveDirectorPassword(id: number) {
+    if (!editPasswordValue) return;
+    setSavingPasswordFor(id);
+    try {
+      const res = await fetch(`/api/admin/directors/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: editPasswordValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Falha ao trocar a senha.");
+        return;
+      }
+      setPasswordNotice((m) => ({ ...m, [id]: "Senha atualizada com sucesso." }));
+      setEditingPasswordFor(null);
+      setEditPasswordValue("");
+    } finally {
+      setSavingPasswordFor(null);
+    }
+  }
+
+  async function handleDeleteDirector(id: number, label: string) {
+    if (!confirm(`Excluir a conta "${label}"? Essa ação não pode ser desfeita.`)) return;
+    setDeletingDirectorId(id);
+    try {
+      const res = await fetch(`/api/admin/directors/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Falha ao excluir a conta.");
+        return;
+      }
+      load();
+    } finally {
+      setDeletingDirectorId(null);
+    }
   }
 
   async function load() {
@@ -142,18 +198,31 @@ export default function ContratosPage() {
     const form = gestorForm[sectorId];
     if (!form?.username || !form?.password) return;
     setSavingGestorFor(sectorId);
+    setGestorNotice((m) => ({ ...m, [sectorId]: "" }));
     try {
       const res = await fetch(`/api/admin/sectors/${sectorId}/gestor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: form.username, password: form.password }),
+        body: JSON.stringify({
+          username: form.username,
+          password: form.password,
+          fullAccess: form.fullAccess,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         alert(data.error);
         return;
       }
-      setGestorForm((m) => ({ ...m, [sectorId]: { username: "", password: "" } }));
+      if (form.fullAccess) {
+        setGestorNotice((m) => ({
+          ...m,
+          [sectorId]:
+            `Conta "${form.username}" criada com acesso total (enxerga e gerencia todos os Contratos, ` +
+            `inclusive os criados depois) — por isso ela não aparece na lista de gestores abaixo.`,
+        }));
+      }
+      setGestorForm((m) => ({ ...m, [sectorId]: { username: "", password: "", fullAccess: false } }));
       load();
     } finally {
       setSavingGestorFor(null);
@@ -209,7 +278,8 @@ export default function ContratosPage() {
           <ul className="divide-y divide-slate-100">
             {sectors.map((s) => {
               const gestores = gestoresBySector[s.id] ?? [];
-              const form = gestorForm[s.id] ?? { username: "", password: "" };
+              const form = gestorForm[s.id] ?? { username: "", password: "", fullAccess: false };
+              const notice = gestorNotice[s.id];
               return (
                 <li key={s.id} className="px-5 py-4">
                   <div className="flex items-center justify-between">
@@ -228,7 +298,7 @@ export default function ContratosPage() {
                       <>Gestor(es): {gestores.map((g) => g.username).join(", ")}</>
                     )}
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <input
                       value={form.username}
                       onChange={(e) =>
@@ -246,6 +316,16 @@ export default function ContratosPage() {
                       placeholder="Senha (nova/redefinir)"
                       className="w-40 rounded-md border border-slate-300 px-2 py-1 text-xs focus:border-slate-500 focus:outline-none"
                     />
+                    <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={form.fullAccess}
+                        onChange={(e) =>
+                          setGestorForm((m) => ({ ...m, [s.id]: { ...form, fullAccess: e.target.checked } }))
+                        }
+                      />
+                      Acesso total (como admin geral) — ex.: conta do SMS
+                    </label>
                     <button
                       onClick={() => handleSaveGestor(s.id)}
                       disabled={savingGestorFor === s.id || !form.username || !form.password}
@@ -254,6 +334,7 @@ export default function ContratosPage() {
                       {savingGestorFor === s.id ? "Salvando..." : "Criar/redefinir gestor"}
                     </button>
                   </div>
+                  {notice && <p className="mt-2 text-xs text-emerald-700">{notice}</p>}
                 </li>
               );
             })}
@@ -266,7 +347,7 @@ export default function ContratosPage() {
         <p className="mt-1 text-sm text-slate-500">
           São somente leitura: não criam, editam ou excluem nada. Por padrão enxergam todos os
           Contratos e as estatísticas da empresa como um todo, igual ao admin geral — mas você pode
-          marcar abaixo um GRUPO específico de Contratos (ex.: "Diretoria de Operações" = ARM RIO +
+          marcar abaixo um GRUPO específico de Contratos (ex.: "Diretoria de Operações" = POLI RIO +
           TPS + SPOT + EQUINOR) pra essa conta ver só aquele grupo. Sem nenhum Contrato marcado =
           sem restrição, vê tudo. Os dois tipos (Diretoria/Superintendência) têm o mesmo nível de
           acesso, só muda o rótulo mostrado pra conta.
@@ -355,19 +436,64 @@ export default function ContratosPage() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {directors.map((d) => (
-              <li key={d.id} className="flex items-center justify-between px-5 py-3 text-sm text-slate-800">
-                <div>
-                  <div className="font-medium">{d.label || d.username}</div>
-                  <div className="text-xs text-slate-500">
-                    {d.label ? `usuário: ${d.username} · ` : ""}
-                    {d.sectors.length === 0
-                      ? "Todos os Contratos"
-                      : d.sectors.map((s) => s.name).join(", ")}
+              <li key={d.id} className="px-5 py-3 text-sm text-slate-800">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{d.label || d.username}</div>
+                    <div className="text-xs text-slate-500">
+                      {d.label ? `usuário: ${d.username} · ` : ""}
+                      {d.sectors.length === 0
+                        ? "Todos os Contratos"
+                        : d.sectors.map((s) => s.name).join(", ")}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      {d.role === "superintendencia" ? "Superintendência" : "Diretoria"}
+                    </span>
+                    <button
+                      onClick={() => openPasswordEditor(d.id)}
+                      className="text-xs text-slate-500 hover:underline"
+                    >
+                      editar senha
+                    </button>
+                    <button
+                      onClick={() => handleDeleteDirector(d.id, d.label || d.username)}
+                      disabled={deletingDirectorId === d.id}
+                      className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                    >
+                      {deletingDirectorId === d.id ? "excluindo..." : "excluir"}
+                    </button>
                   </div>
                 </div>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                  {d.role === "superintendencia" ? "Superintendência" : "Diretoria"}
-                </span>
+                {editingPasswordFor === d.id && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <input
+                      type="password"
+                      value={editPasswordValue}
+                      onChange={(e) => setEditPasswordValue(e.target.value)}
+                      placeholder="Nova senha"
+                      autoFocus
+                      className="w-40 rounded-md border border-slate-300 px-2 py-1 text-xs focus:border-slate-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={() => handleSaveDirectorPassword(d.id)}
+                      disabled={savingPasswordFor === d.id || !editPasswordValue}
+                      className="rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                    >
+                      {savingPasswordFor === d.id ? "Salvando..." : "Salvar nova senha"}
+                    </button>
+                    <button
+                      onClick={() => setEditingPasswordFor(null)}
+                      className="text-xs text-slate-500 hover:underline"
+                    >
+                      cancelar
+                    </button>
+                  </div>
+                )}
+                {passwordNotice[d.id] && (
+                  <p className="mt-2 text-xs text-emerald-700">{passwordNotice[d.id]}</p>
+                )}
               </li>
             ))}
           </ul>

@@ -12,7 +12,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const { id } = await ctx.params;
   const list = await db
-    .select({ id: admins.id, username: admins.username, createdAt: admins.createdAt })
+    .select({ id: admins.id, username: admins.username, role: admins.role, createdAt: admins.createdAt })
     .from(admins)
     .where(eq(admins.sectorId, Number(id)));
 
@@ -20,7 +20,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 }
 
 // Cria (ou, se já existir usuário com esse nome, redefine a senha do) gestor
-// deste contrato.
+// deste contrato. Opcionalmente `fullAccess: true` cria/redefine essa conta
+// como admin geral (role "admin", sem travar num Contrato só) em vez de
+// gestor normal — usado pro setor SMS, que deve enxergar e gerenciar TODOS
+// os Contratos (inclusive os criados depois), igual ao admin geral.
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const guard = await requireSuperAdmin();
   if (!guard.ok) return guard.response;
@@ -33,6 +36,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const body = await request.json().catch(() => null);
   const username = body?.username?.toString().trim();
   const password = body?.password?.toString();
+  const fullAccess = body?.fullAccess === true;
 
   if (!username || !password) {
     return NextResponse.json({ error: "Usuário e senha do gestor são obrigatórios." }, { status: 400 });
@@ -42,10 +46,16 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
 
   const passwordHash = await hashPassword(password);
+  // Conta de acesso total: sectorId fica null (igual ao admin geral) pra
+  // não cair na restrição de canAccessSector/getVisibleSectorIds, que olha
+  // sectorId independente do role — só assim ela realmente enxerga e
+  // gerencia todos os Contratos, inclusive os criados depois.
+  const targetSectorId = fullAccess ? null : sectorId;
+  const targetRole = fullAccess ? "admin" : "gestor";
 
   const existing = await db.query.admins.findFirst({ where: eq(admins.username, username) });
   if (existing) {
-    if (existing.sectorId !== sectorId) {
+    if (!fullAccess && existing.sectorId !== sectorId) {
       return NextResponse.json(
         { error: "Já existe um usuário admin com esse nome vinculado a outro contrato." },
         { status: 409 },
@@ -53,15 +63,15 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     }
     const [updated] = await db
       .update(admins)
-      .set({ passwordHash })
+      .set({ passwordHash, sectorId: targetSectorId, role: targetRole })
       .where(eq(admins.id, existing.id))
-      .returning({ id: admins.id, username: admins.username });
+      .returning({ id: admins.id, username: admins.username, role: admins.role });
     return NextResponse.json({ gestor: updated, updated: true });
   }
 
   const [created] = await db
     .insert(admins)
-    .values({ username, passwordHash, sectorId })
-    .returning({ id: admins.id, username: admins.username });
+    .values({ username, passwordHash, sectorId: targetSectorId, role: targetRole })
+    .returning({ id: admins.id, username: admins.username, role: admins.role });
   return NextResponse.json({ gestor: created }, { status: 201 });
 }

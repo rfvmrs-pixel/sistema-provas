@@ -4,17 +4,30 @@ import { useEffect, useState } from "react";
 import { useIsReadOnlyAdmin } from "../AdminRoleContext";
 
 type Sector = { id: number; name: string };
-type DocumentType = "IT" | "APR";
+type DocumentType = "IT" | "APR" | "MANUAL";
 type Document = {
   id: number;
   fileName: string;
   documentType: DocumentType;
+  category: string | null;
   fileSize: number;
   uploadedAt: string;
   sectorId: number;
   sectorName: string;
   examCount: number;
 };
+
+const DOCUMENT_TYPE_BADGE: Record<DocumentType, string> = {
+  IT: "bg-sky-100 text-sky-700",
+  APR: "bg-amber-100 text-amber-700",
+  MANUAL: "bg-violet-100 text-violet-700",
+};
+const DOCUMENT_TYPE_LABEL: Record<DocumentType, string> = {
+  IT: "IT (Instrução de Trabalho)",
+  APR: "APR (Análise Preliminar de Risco)",
+  MANUAL: "MANUAL (manual de equipamento)",
+};
+type DocumentComic = { id: number; images: string[]; correctIndex: number; explanation: string | null };
 
 function formatSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -37,6 +50,11 @@ export default function BibliotecaPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [uploadSectorId, setUploadSectorId] = useState("");
   const [uploadDocumentType, setUploadDocumentType] = useState<DocumentType>("IT");
+  // Categoria livre (ex.: "Guindastes", "Empilhadeiras"...) — sobretudo pra
+  // organizar manuais de equipamento em Treinamentos, mas disponível pra
+  // qualquer Contrato/Tipo. Digitar um nome novo já "cria" a categoria, sem
+  // precisar de tela de cadastro separada.
+  const [uploadCategory, setUploadCategory] = useState("");
   const [updateTargetId, setUpdateTargetId] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -47,8 +65,126 @@ export default function BibliotecaPage() {
   // Filtro por Contrato, útil quando há vários Contratos cadastrados.
   // "" = Todos.
   const [contractFilter, setContractFilter] = useState("");
-  // Filtro por Tipo (IT/APR) — combina com o de Contrato. "" = Todos.
+  // Filtro por Tipo (IT/APR/MANUAL) — combina com o de Contrato. "" = Todos.
   const [typeFilter, setTypeFilter] = useState<"" | DocumentType>("");
+  // Filtro por Categoria (texto livre, ex.: "Guindastes") — combina com os
+  // outros dois.
+  const [categoryFilter, setCategoryFilter] = useState("");
+
+  // ---- Quadrinho de segurança (Simulado) — 1 por documento, vale pra
+  // qualquer Função, já que o Simulado gera as perguntas direto da Biblioteca. ----
+  const [expandedComicDocId, setExpandedComicDocId] = useState<number | null>(null);
+  const [comicLoading, setComicLoading] = useState(false);
+  const [comic, setComic] = useState<DocumentComic | null>(null);
+  const [comicImages, setComicImages] = useState<(string | null)[]>([null, null, null, null]);
+  const [comicCorrectIndex, setComicCorrectIndex] = useState(0);
+  const [comicExplanation, setComicExplanation] = useState("");
+  const [savingComic, setSavingComic] = useState(false);
+  const [comicError, setComicError] = useState<string | null>(null);
+  const [generatingComic, setGeneratingComic] = useState(false);
+
+  async function toggleComicPanel(docId: number) {
+    if (expandedComicDocId === docId) {
+      setExpandedComicDocId(null);
+      return;
+    }
+    setExpandedComicDocId(docId);
+    setComic(null);
+    setComicImages([null, null, null, null]);
+    setComicCorrectIndex(0);
+    setComicExplanation("");
+    setComicError(null);
+    setComicLoading(true);
+    try {
+      const res = await fetch(`/api/admin/documents/${docId}/comic`);
+      const data = await res.json();
+      if (data.comic) {
+        setComic(data.comic);
+        setComicImages(data.comic.images);
+        setComicCorrectIndex(data.comic.correctIndex);
+        setComicExplanation(data.comic.explanation ?? "");
+      }
+    } finally {
+      setComicLoading(false);
+    }
+  }
+
+  function handleComicFile(index: number, file: File | undefined) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setComicImages((prev) => {
+        const next = [...prev];
+        next[index] = typeof reader.result === "string" ? reader.result : null;
+        return next;
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleSaveComic(e: React.FormEvent, docId: number) {
+    e.preventDefault();
+    if (comicImages.some((img) => !img)) {
+      setComicError("Envie as 4 imagens antes de salvar.");
+      return;
+    }
+    setSavingComic(true);
+    setComicError(null);
+    try {
+      const res = await fetch(`/api/admin/documents/${docId}/comic`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: comicImages, correctIndex: comicCorrectIndex, explanation: comicExplanation }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setComicError(data.error || "Falha ao salvar o quadrinho.");
+        return;
+      }
+      setComic(data.comic);
+    } finally {
+      setSavingComic(false);
+    }
+  }
+
+  // Gera as 4 imagens por IA (Claude decide o cenário, OpenAI gera cada
+  // imagem — ver /api/admin/documents/[id]/comic/generate) e só preenche o
+  // formulário com o resultado; não salva sozinho — o admin revisa e clica
+  // em "Salvar quadrinho" (handleSaveComic) igual a um upload manual.
+  async function handleGenerateComic(docId: number) {
+    setGeneratingComic(true);
+    setComicError(null);
+    try {
+      const res = await fetch(`/api/admin/documents/${docId}/comic/generate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setComicError(data.error || "Falha ao gerar o quadrinho por IA.");
+        return;
+      }
+      setComicImages(data.images);
+      setComicCorrectIndex(data.correctIndex);
+      setComicExplanation(data.explanation ?? "");
+    } catch {
+      setComicError("Erro de conexão ao gerar o quadrinho por IA.");
+    } finally {
+      setGeneratingComic(false);
+    }
+  }
+
+  async function handleRemoveComic(docId: number) {
+    if (!confirm("Remover o quadrinho de segurança desse IT/APR?")) return;
+    setSavingComic(true);
+    setComicError(null);
+    try {
+      await fetch(`/api/admin/documents/${docId}/comic`, { method: "DELETE" });
+      setComic(null);
+      setComicImages([null, null, null, null]);
+      setComicCorrectIndex(0);
+      setComicExplanation("");
+    } finally {
+      setSavingComic(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -81,6 +217,7 @@ export default function BibliotecaPage() {
         const form = new FormData();
         form.append("file", files[0]);
         form.append("documentType", uploadDocumentType);
+        form.append("category", uploadCategory);
         const res = await fetch(`/api/admin/documents/${updateTargetId}`, { method: "PUT", body: form });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}) as { error?: string });
@@ -113,6 +250,7 @@ export default function BibliotecaPage() {
           form.append("file", f);
           form.append("sectorId", uploadSectorId);
           form.append("documentType", uploadDocumentType);
+          form.append("category", uploadCategory);
           const res = await fetch("/api/admin/documents", { method: "POST", body: form });
           if (!res.ok) {
             const data = await res.json().catch(() => ({}) as { error?: string });
@@ -157,26 +295,29 @@ export default function BibliotecaPage() {
 
   const filteredDocuments = documents
     .filter((d) => !typeFilter || d.documentType === typeFilter)
-    .filter((d) => !contractFilter || String(d.sectorId) === contractFilter);
+    .filter((d) => !contractFilter || String(d.sectorId) === contractFilter)
+    .filter(
+      (d) => !categoryFilter || (d.category ?? "").toLowerCase().includes(categoryFilter.toLowerCase()),
+    );
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Biblioteca de PDFs</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Todas as ITs (Instrução de Trabalho) e APRs (Análise Preliminar de Risco) da empresa
-          ficam guardadas aqui, num lugar só, organizadas por Contrato. Suba o PDF uma vez e depois
-          gere (ou regere) quantas provas quiser a partir dele na aba Provas.
+          ITs (Instrução de Trabalho), APRs (Análise Preliminar de Risco) e MANUAIS de equipamento
+          da empresa ficam guardados aqui, num lugar só, organizados por Contrato. Suba o PDF uma
+          vez e depois gere (ou regere) quantas provas quiser a partir dele na aba Provas.
         </p>
       </div>
 
       {/* Tipo vem antes do Contrato de propósito: filtrar por Tipo primeiro
-          (IT ou APR) é o que a maioria usa pra achar um PDF específico numa
-          lista longa — e é o mesmo filtro que reaparece em Provas > Gerar
-          prova, na mesma ordem. */}
+          (IT, APR ou MANUAL) é o que a maioria usa pra achar um PDF
+          específico numa lista longa — e é o mesmo filtro que reaparece em
+          Provas > Gerar prova, na mesma ordem. */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-slate-500">Tipo:</span>
-        {(["", "IT", "APR"] as const).map((t) => (
+        {(["", "IT", "APR", "MANUAL"] as const).map((t) => (
           <button
             key={t || "todos"}
             onClick={() => setTypeFilter(t)}
@@ -186,9 +327,27 @@ export default function BibliotecaPage() {
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
-            {t === "" ? "Todos" : t === "IT" ? "IT (Instrução de Trabalho)" : "APR (Análise de Risco)"}
+            {t === "" ? "Todos" : DOCUMENT_TYPE_LABEL[t]}
           </button>
         ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-slate-500">Categoria:</span>
+        <input
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          placeholder="ex.: Guindastes, Empilhadeiras..."
+          className="w-56 rounded-md border border-slate-300 px-2 py-1 text-xs focus:border-slate-500 focus:outline-none"
+        />
+        {categoryFilter && (
+          <button
+            onClick={() => setCategoryFilter("")}
+            className="text-xs text-slate-500 hover:underline"
+          >
+            limpar
+          </button>
+        )}
       </div>
 
       {sectors.length > 1 && (
@@ -234,6 +393,7 @@ export default function BibliotecaPage() {
               setUploadMode("novo");
               setFiles([]);
               setUpdateTargetId("");
+              setUploadCategory("");
               (document.getElementById("pdf-input") as HTMLInputElement | null)?.value &&
                 ((document.getElementById("pdf-input") as HTMLInputElement).value = "");
             }}
@@ -296,7 +456,27 @@ export default function BibliotecaPage() {
             >
               <option value="IT">IT (Instrução de Trabalho)</option>
               <option value="APR">APR (Análise Preliminar de Risco)</option>
+              <option value="MANUAL">MANUAL (manual de equipamento)</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700">
+              Categoria (opcional — ex.: Guindastes, Empilhadeiras...)
+            </label>
+            <input
+              value={uploadCategory}
+              onChange={(e) => setUploadCategory(e.target.value)}
+              placeholder="Digite pra criar uma categoria nova"
+              list="categorias-existentes"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            />
+            <datalist id="categorias-existentes">
+              {Array.from(new Set(documents.map((d) => d.category).filter((c): c is string => !!c))).map(
+                (c) => (
+                  <option key={c} value={c} />
+                ),
+              )}
+            </datalist>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700">Contrato</label>
@@ -325,7 +505,11 @@ export default function BibliotecaPage() {
               </label>
               <select
                 value={updateTargetId}
-                onChange={(e) => setUpdateTargetId(e.target.value)}
+                onChange={(e) => {
+                  setUpdateTargetId(e.target.value);
+                  const doc = updateCandidates.find((d) => String(d.id) === e.target.value);
+                  setUploadCategory(doc?.category ?? "");
+                }}
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
                 required
               >
@@ -390,40 +574,170 @@ export default function BibliotecaPage() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {filteredDocuments.map((doc) => (
-              <li key={doc.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                        doc.documentType === "APR"
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-sky-100 text-sky-700"
-                      }`}
-                    >
-                      {doc.documentType}
-                    </span>
-                    <a
-                      href={`/api/admin/documents/${doc.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block truncate font-medium text-slate-800 hover:underline"
-                      title={doc.fileName}
-                    >
-                      {doc.fileName}
-                    </a>
+              <li key={doc.id} className="px-5 py-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${DOCUMENT_TYPE_BADGE[doc.documentType]}`}
+                      >
+                        {doc.documentType}
+                      </span>
+                      {doc.category && (
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          {doc.category}
+                        </span>
+                      )}
+                      <a
+                        href={`/api/admin/documents/${doc.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block truncate font-medium text-slate-800 hover:underline"
+                        title={doc.fileName}
+                      >
+                        {doc.fileName}
+                      </a>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {doc.sectorName} · {formatSize(doc.fileSize)} · {doc.examCount}{" "}
+                      {doc.examCount === 1 ? "prova gerada" : "provas geradas"}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-400">
-                    {doc.sectorName} · {formatSize(doc.fileSize)} · {doc.examCount}{" "}
-                    {doc.examCount === 1 ? "prova gerada" : "provas geradas"}
-                  </p>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <button
+                      onClick={() => toggleComicPanel(doc.id)}
+                      className="text-xs font-medium text-indigo-600 hover:underline"
+                    >
+                      {expandedComicDocId === doc.id ? "fechar quadrinho" : "quadrinho de segurança"}
+                    </button>
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => handleDeleteDocument(doc)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        excluir
+                      </button>
+                    )}
+                  </div>
                 </div>
-                {!isReadOnly && (
-                  <button
-                    onClick={() => handleDeleteDocument(doc)}
-                    className="shrink-0 text-xs text-red-600 hover:underline"
-                  >
-                    excluir
-                  </button>
+
+                {expandedComicDocId === doc.id && (
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs text-slate-500">
+                      4 imagens sobre esse IT/APR — uma mostra a forma correta de executar a
+                      atividade, as outras três mostram formas erradas. No resultado do Simulado, o colaborador marca
+                      qual acha que é a certa. Enquanto esse IT/APR não tiver as 4 imagens, essa
+                      etapa não aparece no Simulado. Vale pra qualquer Função (não é preciso repetir por
+                      Função).
+                    </p>
+
+                    {!isReadOnly && !comicLoading && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateComic(doc.id)}
+                          disabled={generatingComic || savingComic}
+                          className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                        >
+                          {generatingComic ? "Gerando as 4 imagens..." : "Gerar por IA"}
+                        </button>
+                        <span className="text-[11px] text-slate-400">
+                          Preenche as 4 imagens abaixo pra você revisar — só grava ao clicar em
+                          &quot;Salvar quadrinho&quot;.
+                        </span>
+                      </div>
+                    )}
+
+                    {comicLoading ? (
+                      <p className="mt-3 text-xs text-slate-400">Carregando...</p>
+                    ) : (
+                      <>
+                        {comicError && <p className="mt-3 text-sm text-red-600">{comicError}</p>}
+                        <form
+                          onSubmit={(e) => handleSaveComic(e, doc.id)}
+                          className="mt-3 space-y-4"
+                        >
+                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {[0, 1, 2, 3].map((idx) => (
+                              <label
+                                key={idx}
+                                className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border bg-white p-3 text-center ${
+                                  comicCorrectIndex === idx
+                                    ? "border-emerald-400 bg-emerald-50"
+                                    : "border-slate-200"
+                                }`}
+                              >
+                                <span className="text-xs font-medium text-slate-500">Imagem {idx + 1}</span>
+                                {comicImages[idx] ? (
+                                  <img
+                                    src={comicImages[idx]!}
+                                    alt=""
+                                    className="h-20 w-20 rounded-md object-cover"
+                                  />
+                                ) : (
+                                  <span className="flex h-20 w-20 items-center justify-center rounded-md border border-dashed border-slate-300 text-[10px] text-slate-400">
+                                    sem imagem
+                                  </span>
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  disabled={isReadOnly}
+                                  onChange={(e) => handleComicFile(idx, e.target.files?.[0])}
+                                  className="hidden"
+                                />
+                                <span className="flex items-center gap-1 text-[11px] text-slate-600">
+                                  <input
+                                    type="radio"
+                                    name="comicCorrect"
+                                    checked={comicCorrectIndex === idx}
+                                    onChange={() => setComicCorrectIndex(idx)}
+                                    disabled={isReadOnly}
+                                  />
+                                  correta
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700">
+                              Explicação (aparece depois de responder)
+                            </label>
+                            <textarea
+                              value={comicExplanation}
+                              onChange={(e) => setComicExplanation(e.target.value)}
+                              disabled={isReadOnly}
+                              rows={2}
+                              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                              placeholder="Por que essa é a forma correta de executar a atividade..."
+                            />
+                          </div>
+
+                          {!isReadOnly && (
+                            <div className="flex gap-2">
+                              <button
+                                disabled={savingComic}
+                                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                              >
+                                {savingComic ? "Salvando..." : comic ? "Atualizar quadrinho" : "Salvar quadrinho"}
+                              </button>
+                              {comic && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveComic(doc.id)}
+                                  disabled={savingComic}
+                                  className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  Remover
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </form>
+                      </>
+                    )}
+                  </div>
                 )}
               </li>
             ))}

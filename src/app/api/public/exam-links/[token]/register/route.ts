@@ -7,6 +7,7 @@ import { hashPassword } from "@/lib/password";
 import { generateLinkToken } from "@/lib/token";
 import { isValidTenureCode } from "@/lib/tenure";
 import { ensureFreshQuestionSet } from "@/lib/attemptLimit";
+import { isExamLinkOpen, examLinkClosedReason } from "@/lib/examLinkPeriod";
 
 // Autocadastro público pelo link de aplicação — sem senha. O colaborador
 // informa nome, matrícula e tempo de empresa (Contrato/Função já são fixos,
@@ -20,10 +21,18 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ token:
   if (!link || !link.active) {
     return NextResponse.json({ error: "Esse link não está mais disponível." }, { status: 404 });
   }
+  if (!isExamLinkOpen(link)) {
+    return NextResponse.json({ error: examLinkClosedReason(link) }, { status: 403 });
+  }
 
   const exam = await db.query.exams.findFirst({ where: eq(exams.id, link.examId) });
   if (!exam || !exam.active) {
     return NextResponse.json({ error: "Essa prova não está mais disponível." }, { status: 400 });
+  }
+  if (!exam.roleId) {
+    // Não deveria acontecer (links só são criados pra provas com Função —
+    // ver /api/admin/exams/[id]/links), mas fica como guarda de segurança.
+    return NextResponse.json({ error: "Essa prova não tem Função definida." }, { status: 400 });
   }
 
   const body = await request.json().catch(() => null);
@@ -137,5 +146,6 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ token:
     examTitle: currentExam.title,
     passingScore: currentExam.passingScore,
     questions: examQuestions,
+    startedAt: attempt.startedAt,
   });
 }

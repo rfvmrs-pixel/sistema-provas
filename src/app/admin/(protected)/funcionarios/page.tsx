@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useIsReadOnlyAdmin } from "../AdminRoleContext";
-import { tenureLabel } from "@/lib/tenure";
+import { tenureLabel, effectiveTenureCode } from "@/lib/tenure";
 
 type Sector = { id: number; name: string };
 type Role = { id: number; name: string };
@@ -16,8 +16,10 @@ type Employee = {
   roleName: string;
   matricula: string | null;
   tempoDeEmpresa: string | null;
+  hireDate: string | null;
 };
 type EmployeeScore = { id: number; avgScore: number; attemptCount: number };
+type ImportResult = { created: number; updated: number; errors: { row: number; message: string }[]; totalRows: number };
 
 export default function FuncionariosPage() {
   const isReadOnly = useIsReadOnlyAdmin();
@@ -33,6 +35,12 @@ export default function FuncionariosPage() {
   const [sectorId, setSectorId] = useState("");
   const [roleId, setRoleId] = useState("");
   const [password, setPassword] = useState("");
+  const [hireDate, setHireDate] = useState("");
+  const [savingHireDateFor, setSavingHireDateFor] = useState<number | null>(null);
+
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -75,6 +83,7 @@ export default function FuncionariosPage() {
         roleId: Number(roleId),
         password,
         matricula: matricula || undefined,
+        hireDate: hireDate || undefined,
       }),
     });
     const data = await res.json();
@@ -85,7 +94,29 @@ export default function FuncionariosPage() {
     setName("");
     setMatricula("");
     setPassword("");
+    setHireDate("");
     load();
+  }
+
+  // Data de contratação editada direto na tabela — o tempo de empresa (coluna
+  // ao lado) passa a ser calculado sozinho a partir dela dali em diante.
+  async function handleUpdateHireDate(emp: Employee, value: string) {
+    setSavingHireDateFor(emp.id);
+    try {
+      const res = await fetch(`/api/admin/employees/${emp.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hireDate: value || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Falha ao salvar a data de contratação.");
+        return;
+      }
+      load();
+    } finally {
+      setSavingHireDateFor(null);
+    }
   }
 
   async function toggleActive(emp: Employee) {
@@ -115,6 +146,32 @@ export default function FuncionariosPage() {
     load();
   }
 
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite reenviar o mesmo arquivo depois, se precisar
+    if (!file) return;
+
+    setImportError(null);
+    setImportResult(null);
+    setImportBusy(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/employees/import", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setImportError(data.error || "Falha ao importar a planilha.");
+        return;
+      }
+      setImportResult(data);
+      load();
+    } catch {
+      setImportError("Erro de conexão ao importar a planilha.");
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -123,6 +180,55 @@ export default function FuncionariosPage() {
           Cadastre funcionários com setor, função e senha de acesso às provas.
         </p>
       </div>
+
+      {!isReadOnly && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Cadastro em lote por planilha</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Baixe o modelo, preencha uma linha por funcionário (Nome, Matrícula, Setor, Função e
+            Tempo de empresa) e envie de volta — quem já existe (mesma Matrícula + Setor) é
+            atualizado, quem não existe é criado.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <a
+              href="/api/admin/employees/template"
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            >
+              Baixar planilha modelo
+            </a>
+            <label className="cursor-pointer rounded-md bg-slate-900 px-4 py-2 text-xs font-medium text-white hover:bg-slate-700">
+              {importBusy ? "Importando..." : "Importar planilha preenchida"}
+              <input
+                type="file"
+                accept=".xlsx"
+                onChange={handleImportFile}
+                disabled={importBusy}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          {importError && <p className="mt-3 text-sm text-red-600">{importError}</p>}
+
+          {importResult && (
+            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p>
+                {importResult.created} criado(s), {importResult.updated} atualizado(s) de{" "}
+                {importResult.totalRows} linha(s).
+              </p>
+              {importResult.errors.length > 0 && (
+                <ul className="mt-2 list-disc space-y-0.5 pl-4 text-red-600">
+                  {importResult.errors.map((err, i) => (
+                    <li key={i}>
+                      Linha {err.row}: {err.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {!isReadOnly && (
         <form onSubmit={handleAdd} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-6">
@@ -173,7 +279,16 @@ export default function FuncionariosPage() {
             className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
             required
           />
-          <button className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 sm:col-span-6">
+          <label className="flex flex-col gap-1 text-xs text-slate-500">
+            Data de contratação (opcional)
+            <input
+              type="date"
+              value={hireDate}
+              onChange={(e) => setHireDate(e.target.value)}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-slate-500 focus:outline-none"
+            />
+          </label>
+          <button className="self-end rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 sm:col-span-6">
             Adicionar funcionário
           </button>
         </form>
@@ -188,6 +303,7 @@ export default function FuncionariosPage() {
               <th className="px-5 py-3">Matrícula</th>
               <th className="px-5 py-3">Setor</th>
               <th className="px-5 py-3">Função</th>
+              <th className="px-5 py-3">Data de contratação</th>
               <th className="px-5 py-3">Tempo de empresa</th>
               <th className="px-5 py-3">Média</th>
               <th className="px-5 py-3">Status</th>
@@ -197,13 +313,13 @@ export default function FuncionariosPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-5 py-4 text-slate-400" colSpan={8}>
+                <td className="px-5 py-4 text-slate-400" colSpan={9}>
                   Carregando...
                 </td>
               </tr>
             ) : employees.length === 0 ? (
               <tr>
-                <td className="px-5 py-4 text-slate-400" colSpan={8}>
+                <td className="px-5 py-4 text-slate-400" colSpan={9}>
                   Nenhum funcionário cadastrado.
                 </td>
               </tr>
@@ -216,7 +332,22 @@ export default function FuncionariosPage() {
                     <td className="px-5 py-3 text-slate-500">{emp.matricula || "—"}</td>
                     <td className="px-5 py-3 text-slate-500">{emp.sectorName}</td>
                     <td className="px-5 py-3 text-slate-500">{emp.roleName}</td>
-                    <td className="px-5 py-3 text-slate-500">{tenureLabel(emp.tempoDeEmpresa)}</td>
+                    <td className="px-5 py-3 text-slate-500">
+                      <input
+                        type="date"
+                        defaultValue={emp.hireDate ?? ""}
+                        disabled={isReadOnly || savingHireDateFor === emp.id}
+                        onBlur={(e) => {
+                          if (e.target.value !== (emp.hireDate ?? "")) {
+                            handleUpdateHireDate(emp, e.target.value);
+                          }
+                        }}
+                        className="w-36 rounded-md border border-slate-300 px-2 py-1 text-xs focus:border-slate-500 focus:outline-none disabled:bg-slate-50"
+                      />
+                    </td>
+                    <td className="px-5 py-3 text-slate-500">
+                      {tenureLabel(effectiveTenureCode(emp))}
+                    </td>
                     <td className="px-5 py-3 text-slate-500">
                       {score && score.attemptCount > 0 ? `${score.avgScore}% (${score.attemptCount})` : "—"}
                     </td>

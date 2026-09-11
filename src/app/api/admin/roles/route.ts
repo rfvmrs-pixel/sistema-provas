@@ -18,12 +18,13 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null);
   const name = body?.name?.toString().trim();
+  const isOperator = body?.isOperator === true;
   if (!name) {
     return NextResponse.json({ error: "Nome da função é obrigatório." }, { status: 400 });
   }
 
   try {
-    const [created] = await db.insert(roles).values({ name }).returning();
+    const [created] = await db.insert(roles).values({ name, isOperator }).returning();
     return NextResponse.json({ role: created }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Já existe uma função com esse nome." }, { status: 409 });

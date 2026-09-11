@@ -13,6 +13,8 @@ import {
   getAttemptsCountByMonth,
   getSectorScoreForPeriod,
   MONTH_LABELS,
+  employeeTier,
+  type EmployeeTier,
 } from "@/lib/reports";
 import { getAdminSession } from "@/lib/session";
 import { getVisibleSectorIds } from "@/lib/requireAdmin";
@@ -20,6 +22,57 @@ import { MeterBarList } from "@/components/charts/MeterBar";
 import { BarChart } from "@/components/charts/BarChart";
 import { TrendLineChart } from "@/components/charts/TrendLineChart";
 import { MonthlyBarChart } from "@/components/charts/MonthlyBarChart";
+import { RoleEmployeeDrilldown } from "@/components/dashboard/RoleEmployeeDrilldown";
+import { RecentAttemptsTable } from "@/components/dashboard/RecentAttemptsTable";
+
+const TIER_ORDER: EmployeeTier[] = ["ouro", "prata", "bronze"];
+const TIER_INFO: Record<EmployeeTier, { label: string; emoji: string; className: string }> = {
+  ouro: { label: "Ouro (acima de 95%)", emoji: "🥇", className: "border-amber-300 bg-amber-50 text-amber-800" },
+  prata: { label: "Prata (70% a 95%)", emoji: "🥈", className: "border-slate-300 bg-slate-50 text-slate-700" },
+  bronze: { label: "Bronze (abaixo de 70%)", emoji: "🥉", className: "border-orange-300 bg-orange-50 text-orange-800" },
+};
+
+function TierRankColumn({
+  title,
+  items,
+}: {
+  title: string;
+  items: { id: number | string; name: string; avgScore: number; attemptCount: number }[];
+}) {
+  const evaluated = items.filter((it) => it.attemptCount > 0);
+  const grouped: Record<EmployeeTier, typeof items> = { ouro: [], prata: [], bronze: [] };
+  for (const item of evaluated) grouped[employeeTier(item.avgScore)].push(item);
+  for (const tier of TIER_ORDER) grouped[tier].sort((a, b) => b.avgScore - a.avgScore);
+
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase text-slate-500">{title}</h3>
+      <div className="mt-2 space-y-2">
+        {evaluated.length === 0 && <p className="text-sm text-slate-400">Sem dados ainda.</p>}
+        {TIER_ORDER.map((tier) => {
+          const list = grouped[tier];
+          if (list.length === 0) return null;
+          const info = TIER_INFO[tier];
+          return (
+            <div key={tier} className={`rounded-md border p-2.5 ${info.className}`}>
+              <p className="text-xs font-semibold">
+                {info.emoji} {info.label} · {list.length}
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {list.map((it) => (
+                  <li key={it.id} className="flex items-center justify-between text-xs">
+                    <span className="truncate">{it.name}</span>
+                    <span className="ml-2 shrink-0 font-medium">{it.avgScore}%</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function ScoreBadge({ value }: { value: number }) {
   const color =
@@ -40,6 +93,24 @@ function Card({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-xl border border-slate-200 bg-white p-5">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function HighlightCard({
+  label,
+  name,
+  detail,
+}: {
+  label: string;
+  name: string | null;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-slate-900">{name ?? "—"}</p>
+      <p className="mt-0.5 text-xs text-slate-500">{detail}</p>
     </div>
   );
 }
@@ -289,16 +360,12 @@ export default async function AdminDashboardPage({
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">Desempenho por função</h2>
+          <p className="text-xs text-slate-500">
+            Clique numa função para ver os funcionários dela; clique no nome do funcionário para
+            abrir o prontuário individual.
+          </p>
           <div className="mt-4">
-            <BarChart
-              emptyMessage="Nenhuma função cadastrada."
-              items={roleSummary.map((r) => ({
-                id: r.id,
-                label: r.name,
-                value: r.avgScore,
-                sublabel: `${r.attemptCount} ${r.attemptCount === 1 ? "tentativa" : "tentativas"}`,
-              }))}
-            />
+            <RoleEmployeeDrilldown roleSummary={roleSummary} employeeSummary={employeeSummary} />
           </div>
         </section>
 
@@ -324,18 +391,23 @@ export default async function AdminDashboardPage({
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">IT x APR</h2>
+          <h2 className="text-sm font-semibold text-slate-900">IT x APR x MANUAL</h2>
           <p className="text-xs text-slate-500">
-            Compara o desempenho em provas de Instrução de Trabalho (IT) com as de Análise
-            Preliminar de Risco (APR) — ajuda a apontar se falta mais conhecimento de processo ou
-            de segurança.
+            Compara o desempenho em provas de Instrução de Trabalho (IT), Análise Preliminar de
+            Risco (APR) e manuais de equipamento (MANUAL) — ajuda a apontar se falta mais
+            conhecimento de processo, de segurança ou do próprio equipamento.
           </p>
           <div className="mt-4">
             <MeterBarList
               emptyMessage="Ainda sem provas respondidas para comparar."
               items={documentTypeSummary.map((d) => ({
                 id: d.documentType,
-                label: d.documentType === "APR" ? "APR (Análise Preliminar de Risco)" : "IT (Instrução de Trabalho)",
+                label:
+                  d.documentType === "APR"
+                    ? "APR (Análise Preliminar de Risco)"
+                    : d.documentType === "MANUAL"
+                      ? "MANUAL (manual de equipamento)"
+                      : "IT (Instrução de Trabalho)",
                 value: d.avgScore,
                 sublabel: `${d.attemptCount} ${d.attemptCount === 1 ? "tentativa" : "tentativas"}`,
               }))}
@@ -377,35 +449,9 @@ export default async function AdminDashboardPage({
               </div>
             </div>
           )}
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-500">
-                  <th className="pb-2">Tema</th>
-                  <th className="pb-2">Respostas</th>
-                  <th className="pb-2">Acerto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topicSummary.length === 0 && (
-                  <tr>
-                    <td className="py-3 text-slate-400" colSpan={3}>
-                      Ainda sem dados suficientes.
-                    </td>
-                  </tr>
-                )}
-                {topicSummary.map((t) => (
-                  <tr key={t.topic} className="border-t border-slate-100">
-                    <td className="py-2 text-slate-800">{t.topic}</td>
-                    <td className="py-2 text-slate-500">{t.totalAnswers}</td>
-                    <td className="py-2">
-                      <ScoreBadge value={t.accuracy} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {topicSummary.length === 0 && (
+            <p className="mt-4 text-sm text-slate-400">Ainda sem dados suficientes.</p>
+          )}
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -449,46 +495,68 @@ export default async function AdminDashboardPage({
         </section>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-slate-900">Últimas tentativas</h2>
-        <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-slate-500">
-              <th className="pb-2">Funcionário</th>
-              <th className="pb-2">Setor</th>
-              <th className="pb-2">Função</th>
-              <th className="pb-2">Prova</th>
-              <th className="pb-2">Data</th>
-              <th className="pb-2">Nota</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentAttempts.length === 0 && (
-              <tr>
-                <td className="py-3 text-slate-400" colSpan={6}>
-                  Nenhuma prova respondida ainda.
-                </td>
-              </tr>
-            )}
-            {recentAttempts.map((a) => (
-              <tr key={a.id} className="border-t border-slate-100">
-                <td className="py-2 text-slate-800">{a.employeeName}</td>
-                <td className="py-2 text-slate-500">{a.sectorName}</td>
-                <td className="py-2 text-slate-500">{a.roleName}</td>
-                <td className="py-2 text-slate-500">{a.examTitle}</td>
-                <td className="py-2 text-slate-500">
-                  {a.finishedAt ? new Date(a.finishedAt).toLocaleString("pt-BR") : "-"}
-                </td>
-                <td className="py-2">
-                  <ScoreBadge value={a.percentage ?? 0} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      </section>
+      {(admin?.role === "admin" || admin?.role === "diretoria" || admin?.role === "superintendencia") && (
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Ranking Bronze / Prata / Ouro
+          </h2>
+          <p className="text-xs text-slate-500">
+            Visível pra contas de admin geral e Diretoria/Superintendência — classifica pela nota
+            média: Bronze abaixo de 70%, Prata de 70% a 95%, Ouro acima de 95%.
+          </p>
+
+          {(() => {
+            const evaluatedSectors = sectorSummary.filter((s) => s.attemptCount > 0);
+            const mostAttempts = [...evaluatedSectors].sort((a, b) => b.attemptCount - a.attemptCount)[0] ?? null;
+            const bestAvg = [...evaluatedSectors].sort((a, b) => b.avgScore - a.avgScore)[0] ?? null;
+            return (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <HighlightCard
+                  label="Contrato que mais fez provas"
+                  name={mostAttempts?.name ?? null}
+                  detail={
+                    mostAttempts
+                      ? `${mostAttempts.attemptCount} ${mostAttempts.attemptCount === 1 ? "tentativa" : "tentativas"} · média ${mostAttempts.avgScore}%`
+                      : "Ainda sem tentativas registradas."
+                  }
+                />
+                <HighlightCard
+                  label="Contrato com a melhor média"
+                  name={bestAvg?.name ?? null}
+                  detail={
+                    bestAvg
+                      ? `média ${bestAvg.avgScore}% · ${bestAvg.attemptCount} ${bestAvg.attemptCount === 1 ? "tentativa" : "tentativas"}`
+                      : "Ainda sem tentativas registradas."
+                  }
+                />
+              </div>
+            );
+          })()}
+
+          <div className="mt-4 grid gap-6 sm:grid-cols-3">
+            <TierRankColumn
+              title="Por Contrato"
+              items={sectorSummary.map((s) => ({ id: s.id, name: s.name, avgScore: s.avgScore, attemptCount: s.attemptCount }))}
+            />
+            <TierRankColumn
+              title="Por Função"
+              items={roleSummary.map((r) => ({ id: r.id, name: r.name, avgScore: r.avgScore, attemptCount: r.attemptCount }))}
+            />
+            <TierRankColumn
+              title="Por Colaborador"
+              items={employeeSummary.map((e) => ({ id: e.id, name: e.name, avgScore: e.avgScore, attemptCount: e.attemptCount }))}
+            />
+          </div>
+        </section>
+      )}
+
+      <RecentAttemptsTable
+        initialAttempts={recentAttempts.map((a) => ({
+          ...a,
+          finishedAt: a.finishedAt ? a.finishedAt.toISOString() : null,
+        }))}
+        roles={roleSummary.map((r) => ({ id: r.id, name: r.name }))}
+      />
     </div>
   );
 }

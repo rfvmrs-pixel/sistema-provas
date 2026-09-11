@@ -3,7 +3,7 @@
 // - "client"  -> Contrato com logo de cliente próprio (ex: Equinor, Prime
 //                Ocean). Mostra o logo do cliente em destaque.
 // - "combo"   -> Sem logo próprio, mas ligado a um cliente conhecido (ex:
-//                LON1/LON2 -> Petrobras, no mesmo grupo do ARM Rio). Mostra
+//                LON1/LON2 -> Petrobras, no mesmo grupo do Poli Rio). Mostra
 //                a marca da Triunfo em destaque + o logo do cliente pequeno,
 //                no canto.
 // - "triunfo" -> Contrato "interno" (sem cliente externo com logo próprio,
@@ -26,9 +26,9 @@ export type ContractBranding =
 // inteiro ficar sem nenhuma logo em produção. Não usar "?v=" de novo aqui.
 const BRANDING_BY_SECTOR: Record<string, ContractBranding> = {
   "PRIME OCEAN": { kind: "client", logoSrc: "/logos/prime_ocean_v2.png", clientName: "Prime Ocean" },
-  // ARM RIO, LON1, LON2 (Petrobras) e agora EQUINOR seguem o mesmo padrão:
+  // POLI RIO, LON1, LON2 (Petrobras) e agora EQUINOR seguem o mesmo padrão:
   // marca da Triunfo em destaque (maior) + logo do cliente menor, ao lado.
-  "ARM RIO": { kind: "combo", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
+  "POLI RIO": { kind: "combo", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
   LON1: { kind: "combo", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
   LON2: { kind: "combo", logoSrc: "/logos/petrobras.png", clientName: "Petrobras" },
   EQUINOR: { kind: "combo", logoSrc: "/logos/equinor_v2.png", clientName: "Equinor" },

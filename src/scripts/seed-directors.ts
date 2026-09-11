@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 // gestor) — é a "média" de várias gerências ao mesmo tempo. Aqui a gente
 // garante 3 contas de Diretoria pré-configuradas, cada uma já travada num
 // GRUPO de Contratos:
-//   - Diretoria de Operações -> ARM RIO + TPS + SPOT + EQUINOR
+//   - Diretoria de Operações -> POLI RIO + TPS + SPOT + EQUINOR
 //   - Diretoria LON1/LON2    -> LON1 + LON2
 //   - Diretoria Prime Ocean  -> PRIME OCEAN
 // Só ATUA na criação: se a conta já existe, não mexe em senha nem no grupo
@@ -20,7 +20,7 @@ const DESIRED_DIRECTORS = [
     username: "diretoria.operacoes",
     label: "Diretoria de Operações",
     password: "Operacoes@2026",
-    sectorNames: ["ARM RIO", "TPS", "SPOT", "EQUINOR"],
+    sectorNames: ["POLI RIO", "TPS", "SPOT", "EQUINOR"],
   },
   {
     username: "diretoria.lon",

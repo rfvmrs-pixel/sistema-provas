@@ -64,6 +64,69 @@
       "when": 1787775751244,
       "tag": "0008_director_sector_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787918434263,
+      "tag": "0009_add_exam_comics",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787925000000,
+      "tag": "0010_repurpose_comics_to_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787941417729,
+      "tag": "0011_exams_role_id_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788273138098,
+      "tag": "0012_add_operator_and_category",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788548071257,
+      "tag": "0013_add_exam_link_period_and_authorization",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788552887009,
+      "tag": "0014_add_exam_focus_and_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1788870466803,
+      "tag": "0015_exam_schedules_kind_role_and_generation",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788996855610,
+      "tag": "0016_rename_arm_rio_to_poli_rio",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788998367594,
+      "tag": "0017_add_employee_hire_date",
+      "breakpoints": true
     }
   ]
 }

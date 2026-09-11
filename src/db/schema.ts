@@ -30,7 +30,7 @@ export const sectors = pgTable("sectors", {
 //                       padrão (sem linhas em admin_sectors) enxergam TODOS os
 //                       Contratos. Se tiverem linhas em admin_sectors, ficam
 //                       restritos a esse GRUPO de Contratos (ex.: "Diretoria
-//                       de Operações" = ARM RIO+TPS+SPOT+EQUINOR) — diferente
+//                       de Operações" = POLI RIO+TPS+SPOT+EQUINOR) — diferente
 //                       do gestor, que é sempre travado num único Contrato.
 // sectorId = X, role "gestor" -> só enxerga/gerencia o próprio contrato (Setor),
 //                       com permissão de escrita normal dentro dele.
@@ -69,6 +69,12 @@ export const adminSectors = pgTable(
 export const roles = pgTable("roles", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 150 }).notNull().unique(),
+  // Marca funções que são "Operador" (ex.: Operador de Guindaste, Operador
+  // de Empilhadeira...) — usado pra filtrar a aba pública de Simulados de
+  // Operadores (/simulado/operadores), que só lista essas funções no lugar
+  // da lista completa. Não afeta nada mais no sistema (autocadastro,
+  // relatórios etc. continuam iguais).
+  isOperator: boolean("is_operator").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -92,8 +98,17 @@ export const employees = pgTable(
     // função existir) ficam com matrícula null, sem problema.
     matricula: varchar("matricula", { length: 50 }),
     // Faixa de tempo de empresa, pra alimentar as análises do painel:
-    // "0-6m" | "6m-1a" | "1-3a" | "3-5a" | "5a+"
+    // "0-6m" | "6m-1a" | "1-3a" | "3-5a" | "5a+". Só é usada de verdade quando
+    // hireDate (abaixo) é null (cadastro antigo/autocadastro/importação em
+    // lote) — quando hireDate existe, a faixa é sempre calculada na hora a
+    // partir dela (ver lib/tenure.ts), então esse campo fica "congelado" e não
+    // precisa ser mantido manualmente.
     tempoDeEmpresa: varchar("tempo_de_empresa", { length: 10 }),
+    // Data de contratação — quando preenchida, o tempo de empresa (faixa
+    // Bronze/Prata/Ouro por tempo de casa no Painel) é calculado
+    // automaticamente a partir dela (ver getTenureSummary em lib/reports.ts),
+    // em vez de depender de alguém escolher/atualizar a faixa manualmente.
+    hireDate: date("hire_date"),
     // ---- Código temporário de "prova do dia" ----
     // O gestor gera, para uma leva de colaboradores, um código de uso único
     // (login = nome + setor, senha = este código) válido só para UMA prova
@@ -134,9 +149,16 @@ export const documents = pgTable(
       .notNull()
       .references(() => sectors.id, { onDelete: "cascade" }),
     fileName: varchar("file_name", { length: 300 }).notNull(),
-    // IT (Instrução de Trabalho) ou APR (Análise Preliminar de Risco) —
+    // IT (Instrução de Trabalho), APR (Análise Preliminar de Risco) ou
+    // MANUAL (manual de equipamento — usado principalmente pelo setor
+    // Treinamentos, gera perguntas técnicas + de uso do equipamento) —
     // definido no upload, guia o filtro em Provas > Gerar prova.
     documentType: varchar("document_type", { length: 10 }).default("IT").notNull(),
+    // Categoria livre (ex.: "Guindastes", "Empilhadeiras"...) pra organizar
+    // os documentos de Treinamentos por tipo de equipamento — o gestor
+    // digita na hora do upload, sem precisar de tela de cadastro separada.
+    // Opcional; qualquer Contrato pode usar, não só Treinamentos.
+    category: varchar("category", { length: 100 }),
     extractedText: text("extracted_text").notNull(),
     // Arquivo original em base64, pra manter o PDF de fato "salvo no sistema"
     // (não só o texto extraído) e permitir baixar/conferir depois.
@@ -157,20 +179,40 @@ export const exams = pgTable(
     summary: text("summary"),
     active: boolean("active").default(true).notNull(),
     passingScore: integer("passing_score").default(70).notNull(), // % mínimo p/ considerar aprovado
-    // Tipo do documento de origem: IT (Instrução de Trabalho) ou APR (Análise
-    // Preliminar de Risco). Influencia o prompt de geração das questões.
+    // Tipo do documento de origem: IT (Instrução de Trabalho), APR (Análise
+    // Preliminar de Risco) ou MANUAL (manual de equipamento). Influencia o
+    // prompt de geração das questões.
     documentType: varchar("document_type", { length: 10 }).default("IT").notNull(),
+    // Foco/tema específico que o professor pediu antes de gerar (opcional) —
+    // ex.: "só sobre uso de EPI". Guardado aqui pra aparecer na tela e
+    // reaproveitar se alguém gerar outra versão depois. Ver lib/ai.ts.
+    focus: varchar("focus", { length: 300 }),
+    // Versão dessa prova pro mesmo documento+função+tipo — 1 na primeira vez
+    // que alguém gera; sobe pra 2, 3... só quando o professor confirma
+    // explicitamente que quer gerar de novo (ver POST /api/admin/exams,
+    // fica um aviso de "já existe uma prova pra isso" antes de duplicar).
+    version: integer("version").default(1).notNull(),
+    // Copiado do documento de origem no momento da geração — categoria livre
+    // (ex.: "Guindastes") pra filtrar provas/simulados por tipo de
+    // equipamento, principalmente em Treinamentos.
+    category: varchar("category", { length: 100 }),
     // De qual documento da biblioteca essa prova foi gerada (se veio de lá).
     // set null: apagar o PDF da biblioteca não apaga as provas já geradas.
     documentId: integer("document_id").references(() => documents.id, { onDelete: "set null" }),
-    // Cada prova pertence a exatamente 1 Setor + 1 Função. Funcionário só vê
-    // provas do seu próprio Setor E Função (ver /api/employee/exams).
+    // Cada prova pertence a exatamente 1 Setor. Funcionário só vê provas do
+    // seu próprio Setor E Função (ver /api/employee/exams) — exceto as
+    // provas auto-geradas pelo Simulado (ver abaixo), que não têm Função.
     sectorId: integer("sector_id")
       .notNull()
       .references(() => sectors.id, { onDelete: "restrict" }),
-    roleId: integer("role_id")
-      .notNull()
-      .references(() => roles.id, { onDelete: "restrict" }),
+    // NULL = prova auto-gerada pela IA na hora, direto de um IT/APR da
+    // Biblioteca, pelo autosserviço de Simulado (ver
+    // /api/public/simulado/start) — não é role-scoped, vale pra qualquer
+    // Função do Contrato (mesma ideia do Simulado autosserviço, mas aqui persistida como
+    // prova de verdade porque o Simulado grava tentativa/resposta/PDF/
+    // indicador). Provas criadas pelo admin em Provas > Gerar prova
+    // continuam sempre com roleId preenchido.
+    roleId: integer("role_id").references(() => roles.id, { onDelete: "restrict" }),
     // Incrementa toda vez que as questões são regeneradas (manual pelo admin,
     // ou automático depois de 3 tentativas "oficial" do mesmo colaborador —
     // ver src/lib/attemptLimit.ts). attempts.questionSetVersion guarda com
@@ -201,6 +243,28 @@ export const questions = pgTable(
   (t) => [index("questions_exam_idx").on(t.examId)],
 );
 
+// ---------- Quadrinho de segurança (Simulado) ----------
+// Desafio de "qual desenho está certo": 4 imagens (uma correta, três
+// incorretas/decoy) associadas a UM documento da Biblioteca (IT/APR) — o
+// colaborador marca qual delas retrata certo a atividade. Fica ligado ao
+// documento (não a uma prova de uma Função específica) porque o Simulado gera as
+// perguntas na hora direto do documento, sem depender de nenhuma prova já
+// existir. Estrutura pronta desde já; o conteúdo (as 4 imagens de cada
+// IT/APR) é cadastrado pelo gestor depois — enquanto não existir um
+// quadrinho pra um documento, a etapa simplesmente não aparece no Simulado.
+// `images`: array de 4 data URLs (base64) na ordem A-D.
+export const documentComics = pgTable("document_comics", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id")
+    .notNull()
+    .unique()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  images: jsonb("images").notNull(),
+  correctIndex: integer("correct_index").notNull(),
+  explanation: text("explanation"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ---------- Links de aplicação de prova ----------
 // O gestor gera um link público pra aplicar uma prova sem precisar
 // pré-cadastrar ninguém: quem abre o link se autocadastra (nome, matrícula,
@@ -220,12 +284,27 @@ export const examLinks = pgTable(
       .notNull()
       .references(() => exams.id, { onDelete: "cascade" }),
     token: varchar("token", { length: 40 }).notNull().unique(),
+    // "geral" | "direcionada" | "curso" | "simulado" — escolhido já na tela
+    // inicial de "Gerar prova" (ver /admin/provas), sem precisar de uma
+    // segunda tela de confirmação.
     kind: varchar("kind", { length: 20 }).default("geral").notNull(),
     targetEmployeeId: integer("target_employee_id").references(() => employees.id, {
       onDelete: "set null",
     }),
     label: varchar("label", { length: 150 }),
     active: boolean("active").default(true).notNull(),
+    // Período de aplicação (ex.: 01/09 a 30/09) — fora desse intervalo o
+    // link fecha sozinho pra apuração de notas (ver isExamLinkOpen em
+    // lib/examLinkPeriod.ts). Null = sem restrição de período.
+    periodStart: date("period_start"),
+    periodEnd: date("period_end"),
+    // Preenchido quando um gestor autoriza responder fora do período —
+    // reabre o link mesmo com a data corrente fora de [periodStart,
+    // periodEnd]. O comentário é obrigatório (ver rota PATCH
+    // /api/admin/exam-links/[id]).
+    authorizedBy: varchar("authorized_by", { length: 150 }),
+    authorizationComment: varchar("authorization_comment", { length: 500 }),
+    authorizedAt: timestamp("authorized_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("exam_links_exam_idx").on(t.examId)],
@@ -282,10 +361,26 @@ export const examSchedules = pgTable(
       .notNull()
       .references(() => sectors.id, { onDelete: "cascade" }),
     documentId: integer("document_id").references(() => documents.id, { onDelete: "set null" }),
-    // Guarda o nome do documento mesmo se ele for apagado da biblioteca depois.
+    // Guarda o nome do documento mesmo se ele for apagado da biblioteca depois,
+    // ou uma descrição livre quando o PDF exato ainda não foi decidido (dá pra
+    // reservar a data no cronograma e escolher o PDF depois).
     documentLabel: varchar("document_label", { length: 300 }).notNull(),
     scheduledDate: date("scheduled_date").notNull(),
     note: varchar("note", { length: 300 }),
+    // "geral" | "direcionada" | "curso" | "simulado" — mesmo tipo de
+    // aplicação usado nos links de prova (ver exam_links.kind). Define como
+    // o link vai ser criado quando alguém acionar "Gerar prova agora".
+    kind: varchar("kind", { length: 20 }).default("geral").notNull(),
+    roleId: integer("role_id").references(() => roles.id, { onDelete: "set null" }),
+    numQuestions: integer("num_questions").default(15).notNull(),
+    // Só usado quando kind = "direcionada".
+    targetEmployeeName: varchar("target_employee_name", { length: 150 }),
+    targetEmployeeMatricula: varchar("target_employee_matricula", { length: 50 }),
+    // Preenchidos quando alguém aciona "Gerar prova agora" nesse agendamento
+    // — vira a prova + link de aplicação de verdade (ver POST
+    // /api/admin/schedules/[id]/generate). Null = ainda só planejado.
+    examId: integer("exam_id").references(() => exams.id, { onDelete: "set null" }),
+    examLinkId: integer("exam_link_id").references(() => examLinks.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("exam_schedules_sector_date_idx").on(t.sectorId, t.scheduledDate)],
@@ -322,6 +417,7 @@ export const sectorsRelations = relations(sectors, ({ many }) => ({
 export const documentsRelations = relations(documents, ({ one, many }) => ({
   sector: one(sectors, { fields: [documents.sectorId], references: [sectors.id] }),
   exams: many(exams),
+  comic: one(documentComics, { fields: [documents.id], references: [documentComics.documentId] }),
 }));
 
 export const adminsRelations = relations(admins, ({ one, many }) => ({
@@ -355,6 +451,10 @@ export const examsRelations = relations(exams, ({ one, many }) => ({
   document: one(documents, { fields: [exams.documentId], references: [documents.id] }),
 }));
 
+export const documentComicsRelations = relations(documentComics, ({ one }) => ({
+  document: one(documents, { fields: [documentComics.documentId], references: [documents.id] }),
+}));
+
 export const examLinksRelations = relations(examLinks, ({ one, many }) => ({
   exam: one(exams, { fields: [examLinks.examId], references: [exams.id] }),
   targetEmployee: one(employees, { fields: [examLinks.targetEmployeeId], references: [employees.id] }),
@@ -381,4 +481,7 @@ export const answersRelations = relations(answers, ({ one }) => ({
 export const examSchedulesRelations = relations(examSchedules, ({ one }) => ({
   sector: one(sectors, { fields: [examSchedules.sectorId], references: [sectors.id] }),
   document: one(documents, { fields: [examSchedules.documentId], references: [documents.id] }),
+  role: one(roles, { fields: [examSchedules.roleId], references: [roles.id] }),
+  exam: one(exams, { fields: [examSchedules.examId], references: [exams.id] }),
+  examLink: one(examLinks, { fields: [examSchedules.examLinkId], references: [examLinks.id] }),
 }));

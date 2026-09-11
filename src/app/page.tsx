@@ -12,9 +12,9 @@ const TRIUNFO_FULL = "/logos/triunfo_full.png";
 type Sector = { id: number; name: string };
 
 // Ordem manual dos cartões de Contrato na tela de abertura — os "BR"
-// (Petrobras: ARM RIO/LON1/LON2) ficam juntos, com EQUINOR e SPOT logo ao
+// (Petrobras: POLI RIO/LON1/LON2) ficam juntos, com EQUINOR e SPOT logo ao
 // lado. Quem não está na lista entra depois, na ordem que vier da API.
-const SECTOR_ORDER = ["ARM RIO", "LON1", "LON2", "EQUINOR", "SPOT", "MANUTENÇÃO", "PRIME OCEAN", "TPS"];
+const SECTOR_ORDER = ["POLI RIO", "LON1", "LON2", "EQUINOR", "SPOT", "MANUTENÇÃO", "PRIME OCEAN", "TPS"];
 
 function sortSectors(sectors: Sector[]): Sector[] {
   const rank = (name: string) => {
@@ -29,7 +29,7 @@ function sortSectors(sectors: Sector[]): Sector[] {
 // Só pra mostrar um cartão específico por grupo na tela de abertura; quem
 // autentica de verdade é usuário/senha, não esse rótulo.
 const DIRETORIA_GROUPS = [
-  { label: "Diretoria de Operações", contracts: "ARM RIO, TPS, SPOT, EQUINOR" },
+  { label: "Diretoria de Operações", contracts: "POLI RIO, TPS, SPOT, EQUINOR" },
   { label: "Diretoria LON1/LON2", contracts: "LON1, LON2" },
   { label: "Diretoria Prime Ocean", contracts: "PRIME OCEAN" },
 ];
@@ -593,18 +593,67 @@ export default function HomePage() {
                   className="mt-10 scroll-mt-20 rounded-xl border border-slate-200 bg-white p-6 text-left shadow-sm"
                 >
                   <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                    Simulados
+                    Provas e Simulados
                   </h2>
                   <p className="mt-1 text-xs text-slate-500">
-                    Qualquer colaborador pode escolher o Contrato, a Função e o tipo de documento (IT
-                    ou APR) e realizar uma prova de treinamento. O resultado também fica registrado.
+                    Três jeitos de acessar, cada um com seu próprio botão — cada prova tem no
+                    máximo 10 minutos para ser respondida.
                   </p>
-                  <Link
-                    href="/prova"
-                    className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
-                  >
-                    Fazer uma prova / simulado
-                  </Link>
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="text-sm font-semibold text-slate-900">Minha área</h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Sem senha: informe seu nome e matrícula pra ver as provas que você já fez
+                        (onde acertou e errou), praticar e fazer prova oficial.
+                      </p>
+                      <Link
+                        href="/prova?mode=matricula"
+                        className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+                      >
+                        Entrar com matrícula
+                      </Link>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="text-sm font-semibold text-slate-900">Simulado</h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Sem senha. Informe nome, matrícula, Contrato e Função, e escolha livremente
+                        qual IT, APR ou MANUAL quer praticar.
+                      </p>
+                      <Link
+                        href="/simulado"
+                        className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+                      >
+                        Fazer um Simulado
+                      </Link>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="text-sm font-semibold text-slate-900">Simulado de Operadores</h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Mesmo simulado livre, sem senha, mas com a lista de Função filtrada só pras
+                        funções de Operador (guindaste, empilhadeira...).
+                      </p>
+                      <Link
+                        href="/simulado/operadores"
+                        className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+                      >
+                        Simulado de Operadores
+                      </Link>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="text-sm font-semibold text-slate-900">Prova oficial</h3>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Com sua senha pessoal ou o código da prova do dia passado pelo seu gestor. O
+                        resultado fica registrado nos relatórios.
+                      </p>
+                      <Link
+                        href="/prova"
+                        className="mt-3 inline-block rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                      >
+                        Fazer prova oficial
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               </>
             )}

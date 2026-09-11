@@ -32,6 +32,10 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
   }
   if (body?.roleId) update.roleId = Number(body.roleId);
   if (body?.name) update.name = body.name.toString().trim();
+  if (typeof body?.matricula === "string") update.matricula = body.matricula.trim() || null;
+  if ("hireDate" in (body ?? {})) {
+    update.hireDate = body.hireDate ? body.hireDate.toString().trim() : null;
+  }
   if (body?.password) {
     if (body.password.toString().length < 4) {
       return NextResponse.json({ error: "Senha deve ter ao menos 4 caracteres." }, { status: 400 });
