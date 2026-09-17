@@ -25,6 +25,8 @@ export default async function AuditoriaPage() {
   const overallTotal = sectorsWithTeam.reduce((acc, s) => acc + s.totalEmployees, 0);
   const overallAudited = sectorsWithTeam.reduce((acc, s) => acc + s.fullyAuditedEmployees, 0);
   const overallPercentage = overallTotal > 0 ? Math.round((overallAudited / overallTotal) * 100) : 0;
+  const overallWithAnyAttempt = sectorsWithTeam.reduce((acc, s) => acc + s.employeesWithAnyAttempt, 0);
+  const overallWithoutAnyAttempt = sectorsWithTeam.reduce((acc, s) => acc + s.employeesWithoutAnyAttempt, 0);
 
   return (
     <div className="space-y-8">
@@ -62,6 +64,32 @@ export default async function AuditoriaPage() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Já realizaram alguma prova
+          </p>
+          <p className="mt-2 text-2xl font-semibold text-emerald-700">
+            {overallWithAnyAttempt} <span className="text-base font-normal text-slate-400">/ {overallTotal}</span>
+          </p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Fez pelo menos 1 das provas da própria Função nos últimos {AUDIT_WINDOW_DAYS} dias — não
+            precisa ter concluído todas ainda.
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Nunca realizaram nenhuma prova
+          </p>
+          <p className="mt-2 text-2xl font-semibold text-red-700">
+            {overallWithoutAnyAttempt} <span className="text-base font-normal text-slate-400">/ {overallTotal}</span>
+          </p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Inclui quem nunca tentou e quem está em Função sem nenhuma IT/APR cadastrada pro Contrato.
+          </p>
+        </div>
+      </div>
+
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-slate-900">% da equipe auditada por Contrato</h2>
         <div className="mt-4">
@@ -87,6 +115,9 @@ export default async function AuditoriaPage() {
                 <span className="text-xs text-slate-500">
                   {sector.fullyAuditedEmployees} de {sector.totalEmployees} funcionário(s) auditado(s) —{" "}
                   <strong className="text-slate-700">{sector.auditedPercentage}%</strong>
+                  <span className="mx-1.5 text-slate-300">·</span>
+                  {sector.employeesWithAnyAttempt} já fizeram alguma prova, {sector.employeesWithoutAnyAttempt}{" "}
+                  não fizeram nenhuma
                 </span>
               ) : (
                 <span className="text-xs text-slate-400">Sem funcionários ativos</span>
