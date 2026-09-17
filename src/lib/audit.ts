@@ -26,6 +26,12 @@ export type AuditSectorRow = {
   totalEmployees: number;
   fullyAuditedEmployees: number;
   auditedPercentage: number | null; // null = sem funcionários ativos no Contrato
+  // Quantos já realizaram PELO MENOS UMA das provas aplicáveis à própria
+  // Função (mesmo que ainda faltem outras) vs. quantos não realizaram
+  // nenhuma. Funcionário sem nenhuma prova aplicável à Função (Contrato
+  // ainda sem IT/APR cadastrada) sempre cai em "sem prova realizada".
+  employeesWithAnyAttempt: number;
+  employeesWithoutAnyAttempt: number;
   pendingExams: AuditPendingExam[];
 };
 
@@ -91,11 +97,23 @@ export async function getAuditSummary(sectorIds?: number[]): Promise<AuditSector
     const sectorExams = applicableExams.filter((e) => e.sectorId === sector.id);
 
     let fullyAuditedEmployees = 0;
+    let employeesWithAnyAttempt = 0;
     for (const emp of sectorEmployees) {
       const applicableForEmployee = sectorExams.filter((e) => e.roleId === emp.roleId);
-      const audited = applicableForEmployee.every((e) => completedSet.has(`${emp.id}:${e.id}`));
+      // Sem nenhuma prova aplicável (Função sem IT/APR cadastrada pro
+      // Contrato), o `.every()` de um array vazio retorna `true` — o que
+      // marcaria o funcionário como "auditado" sem ele ter feito prova
+      // nenhuma. Por isso exige explicitamente que exista ao menos 1 prova
+      // aplicável: sem prova realizada, fica zerado (não auditado).
+      const audited =
+        applicableForEmployee.length > 0 &&
+        applicableForEmployee.every((e) => completedSet.has(`${emp.id}:${e.id}`));
       if (audited) fullyAuditedEmployees++;
+
+      const hasAnyAttempt = applicableForEmployee.some((e) => completedSet.has(`${emp.id}:${e.id}`));
+      if (hasAnyAttempt) employeesWithAnyAttempt++;
     }
+    const employeesWithoutAnyAttempt = sectorEmployees.length - employeesWithAnyAttempt;
 
     const pendingExams: AuditPendingExam[] = sectorExams
       .map((exam) => {
@@ -123,6 +141,8 @@ export async function getAuditSummary(sectorIds?: number[]): Promise<AuditSector
       fullyAuditedEmployees,
       auditedPercentage:
         sectorEmployees.length > 0 ? Math.round((fullyAuditedEmployees / sectorEmployees.length) * 100) : null,
+      employeesWithAnyAttempt,
+      employeesWithoutAnyAttempt,
       pendingExams,
     };
   });
