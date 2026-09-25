@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ExamRunner } from "@/components/exam/ExamRunner";
-import { EXAM_TIME_LIMIT_MINUTES } from "@/lib/examTimer";
+import { MINUTES_PER_10_QUESTIONS } from "@/lib/examTimer";
 
 type Sector = { id: number; name: string };
 type Role = { id: number; name: string; isOperator?: boolean };
@@ -263,7 +263,7 @@ export default function SimuladoForm({ operatorOnly = false }: { operatorOnly?: 
                 {operatorOnly
                   ? "Treino livre, sem senha, exclusivo para funções de Operador (guindaste, empilhadeira...): informe seus dados, escolha o Contrato e a sua função e depois selecione qual IT, APR ou MANUAL você quer praticar."
                   : "Treino livre, sem senha: informe seus dados, escolha o Contrato e a Função e depois selecione qual IT, APR ou MANUAL você quer praticar."}{" "}
-                Cada prova tem no máximo {EXAM_TIME_LIMIT_MINUTES} minutos para ser respondida.
+                Cada prova tem {MINUTES_PER_10_QUESTIONS} minutos a cada 10 perguntas para ser respondida.
               </p>
               <p className="mt-2 text-xs text-slate-400">
                 Precisa aplicar uma prova oficial (com código ou link do gestor)?{" "}

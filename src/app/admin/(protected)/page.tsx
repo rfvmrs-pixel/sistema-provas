@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   getSectorSummary,
   getRoleSummary,
@@ -6,23 +5,18 @@ import {
   getTopicSummary,
   getRecentAttempts,
   getDocumentTypeSummary,
-  getScoreTrend,
   getAvgDurationMinutes,
-  getTenureSummary,
   getAvailableAttemptYears,
   getAttemptsCountByMonth,
-  getSectorScoreForPeriod,
-  MONTH_LABELS,
   employeeTier,
   type EmployeeTier,
 } from "@/lib/reports";
+import { getContractView } from "@/lib/contractView";
+import { ContractView, TopEmployees } from "@/components/dashboard/ContractView";
 import { getAdminSession } from "@/lib/session";
 import { getVisibleSectorIds } from "@/lib/requireAdmin";
 import { MeterBarList } from "@/components/charts/MeterBar";
-import { BarChart } from "@/components/charts/BarChart";
-import { TrendLineChart } from "@/components/charts/TrendLineChart";
 import { MonthlyBarChart } from "@/components/charts/MonthlyBarChart";
-import { RoleEmployeeDrilldown } from "@/components/dashboard/RoleEmployeeDrilldown";
 import { RecentAttemptsTable } from "@/components/dashboard/RecentAttemptsTable";
 
 const TIER_ORDER: EmployeeTier[] = ["ouro", "prata", "bronze"];
@@ -74,20 +68,6 @@ function TierRankColumn({
   );
 }
 
-function ScoreBadge({ value }: { value: number }) {
-  const color =
-    value >= 70
-      ? "bg-emerald-100 text-emerald-700"
-      : value >= 50
-        ? "bg-amber-100 text-amber-700"
-        : "bg-red-100 text-red-700";
-  return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>
-      {value}%
-    </span>
-  );
-}
-
 function Card({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -115,24 +95,18 @@ function HighlightCard({
   );
 }
 
-export default async function AdminDashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ ano?: string; mes?: string }>;
-}) {
+export default async function AdminDashboardPage() {
   // Gestor de contrato só pode ver os números do próprio Contrato; Diretoria/
   // Superintendência escopada a um grupo só vê os do grupo dela — admin
   // geral e Diretoria/Superintendência sem grupo definido veem a empresa toda.
   const admin = await getAdminSession();
   const sectorIds = admin ? getVisibleSectorIds(admin) : undefined;
 
-  const sp = await searchParams;
+  // Sem filtro de período: os gráficos mensais mostram o ano corrente (ou o
+  // último ano com provas) e o resto do Painel usa o histórico completo.
   const availableYears = await getAvailableAttemptYears(sectorIds);
   const currentYear = new Date().getFullYear();
-  const requestedYear = sp.ano ? parseInt(sp.ano, 10) : currentYear;
-  const selectedYear = availableYears.includes(requestedYear) ? requestedYear : (availableYears[0] ?? currentYear);
-  const requestedMonth = sp.mes ? parseInt(sp.mes, 10) : NaN;
-  const selectedMonth = requestedMonth >= 1 && requestedMonth <= 12 ? requestedMonth : undefined;
+  const selectedYear = availableYears.includes(currentYear) ? currentYear : (availableYears[0] ?? currentYear);
 
   const [
     sectorSummary,
@@ -141,12 +115,10 @@ export default async function AdminDashboardPage({
     topicSummary,
     recentAttempts,
     documentTypeSummary,
-    scoreTrend,
     avgDurationMinutes,
-    tenureSummary,
     examsPerMonth,
     simuladosPerMonth,
-    sectorScoreForPeriod,
+    contracts,
   ] = await Promise.all([
     getSectorSummary(sectorIds),
     getRoleSummary(sectorIds),
@@ -154,17 +126,11 @@ export default async function AdminDashboardPage({
     getTopicSummary(sectorIds),
     getRecentAttempts(15, sectorIds),
     getDocumentTypeSummary(sectorIds),
-    getScoreTrend(30, sectorIds),
     getAvgDurationMinutes(sectorIds),
-    getTenureSummary(sectorIds),
     getAttemptsCountByMonth("oficial", selectedYear, sectorIds),
     getAttemptsCountByMonth("simulado", selectedYear, sectorIds),
-    getSectorScoreForPeriod(selectedYear, selectedMonth, sectorIds),
+    getContractView(sectorIds),
   ]);
-
-  const periodLabel = selectedMonth
-    ? `${MONTH_LABELS[selectedMonth - 1]}/${selectedYear}`
-    : `ano de ${selectedYear}`;
 
   const totalAttempts = employeeSummary.reduce((acc, e) => acc + e.attemptCount, 0);
   const evaluated = employeeSummary.filter((e) => e.attemptCount > 0);
@@ -172,12 +138,11 @@ export default async function AdminDashboardPage({
     ? Math.round(evaluated.reduce((acc, e) => acc + e.avgScore, 0) / evaluated.length)
     : 0;
 
-  const sectorsNeedingTraining = sectorSummary.filter((s) => s.needsTraining);
-  const rolesNeedingTraining = roleSummary.filter((r) => r.needsTraining);
-  const topicsNeedingTraining = topicSummary.filter((t) => t.needsTraining);
-  const employeesNeedingTraining = employeeSummary
-    .filter((e) => e.needsTraining)
-    .sort((a, b) => a.avgScore - b.avgScore);
+  const employeesNeedingTraining = employeeSummary.filter((e) => e.needsTraining);
+  const ranked = [...evaluated].sort((a, b) => b.avgScore - a.avgScore || b.attemptCount - a.attemptCount);
+  const toTop = (e: (typeof evaluated)[number]) => ({ id: e.id, name: e.name, detail: `${e.sectorName} · ${e.roleName}`, avgScore: e.avgScore });
+  const top10Best = ranked.slice(0, 10).map(toTop);
+  const top10Worst = [...ranked].reverse().slice(0, 10).map(toTop);
 
   return (
     <div className="space-y-10">
@@ -190,55 +155,11 @@ export default async function AdminDashboardPage({
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Card label="Funcionários avaliados" value={evaluated.length} />
-        <Card label="Tentativas concluídas" value={totalAttempts} />
+        <Card label="Provas realizadas" value={totalAttempts} />
         <Card label="Média geral" value={`${overallAvg}%`} />
         <Card label="Precisam de treinamento" value={employeesNeedingTraining.length} />
         <Card label="Tempo médio de prova" value={avgDurationMinutes > 0 ? `${avgDurationMinutes} min` : "—"} />
       </div>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-slate-900">Filtro de período</h2>
-        <p className="text-xs text-slate-500">
-          Ano e mês afetam os gráficos mensais e a média por contrato logo abaixo — o resto do
-          Painel continua mostrando o histórico completo.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-slate-500">Ano:</span>
-          {availableYears.map((y) => (
-            <Link
-              key={y}
-              href={`/admin${selectedMonth ? `?ano=${y}&mes=${selectedMonth}` : `?ano=${y}`}`}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                y === selectedYear ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {y}
-            </Link>
-          ))}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-slate-500">Mês:</span>
-          <Link
-            href={`/admin?ano=${selectedYear}`}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              !selectedMonth ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            }`}
-          >
-            Todos
-          </Link>
-          {MONTH_LABELS.map((label, i) => (
-            <Link
-              key={label}
-              href={`/admin?ano=${selectedYear}&mes=${i + 1}`}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                selectedMonth === i + 1 ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
-        </div>
-      </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -271,125 +192,19 @@ export default async function AdminDashboardPage({
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-slate-900">Média de notas por contrato — {periodLabel}</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Visão por contrato</h2>
         <p className="text-xs text-slate-500">
-          Média de todas as tentativas concluídas no período selecionado no filtro acima, por
-          Contrato.
+          Nível de cada contrato (🥇 Ouro acima de 95%, 🥈 Prata de 70% a 95%, 🥉 Bronze abaixo de 70% — pela
+          nota média) e o % de realização das ITs/APRs/Manuais que cada função tem prova ativa. Clique no
+          contrato para abrir as funções, na função para ver os colaboradores e no colaborador para o painel
+          dele com as provas feitas.
         </p>
         <div className="mt-4">
-          <BarChart
-            emptyMessage="Nenhum contrato cadastrado."
-            items={sectorScoreForPeriod.map((s) => ({
-              id: s.id,
-              label: s.name,
-              value: s.avgScore,
-              sublabel: `${s.attemptCount} ${s.attemptCount === 1 ? "tentativa" : "tentativas"}`,
-            }))}
-          />
+          <ContractView contracts={contracts} />
         </div>
       </section>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-slate-900">Tendência da média geral</h2>
-        <p className="text-xs text-slate-500">Média de nota por dia, últimos 30 dias.</p>
-        <div className="mt-4">
-          <TrendLineChart points={scoreTrend} />
-        </div>
-      </section>
-
-      {(sectorsNeedingTraining.length > 0 ||
-        rolesNeedingTraining.length > 0 ||
-        topicsNeedingTraining.length > 0) && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-          <h2 className="text-sm font-semibold text-amber-900">
-            Pontos de atenção — abaixo de 70% de acerto
-          </h2>
-          <div className="mt-3 grid gap-4 sm:grid-cols-3">
-            <div>
-              <p className="text-xs font-medium uppercase text-amber-700">Setores</p>
-              <ul className="mt-1 space-y-1 text-sm text-amber-900">
-                {sectorsNeedingTraining.length === 0 && <li className="text-amber-700/60">Nenhum</li>}
-                {sectorsNeedingTraining.map((s) => (
-                  <li key={s.id}>
-                    {s.name} — {s.avgScore}%
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase text-amber-700">Funções</p>
-              <ul className="mt-1 space-y-1 text-sm text-amber-900">
-                {rolesNeedingTraining.length === 0 && <li className="text-amber-700/60">Nenhuma</li>}
-                {rolesNeedingTraining.map((r) => (
-                  <li key={r.id}>
-                    {r.name} — {r.avgScore}%
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase text-amber-700">Temas</p>
-              <ul className="mt-1 space-y-1 text-sm text-amber-900">
-                {topicsNeedingTraining.length === 0 && <li className="text-amber-700/60">Nenhum</li>}
-                {topicsNeedingTraining.slice(0, 6).map((t) => (
-                  <li key={t.topic}>
-                    {t.topic} — {t.accuracy}%
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Desempenho por setor</h2>
-          <div className="mt-4">
-            <BarChart
-              emptyMessage="Nenhum contrato cadastrado."
-              items={sectorSummary.map((s) => ({
-                id: s.id,
-                label: s.name,
-                value: s.avgScore,
-                sublabel: `${s.attemptCount} ${s.attemptCount === 1 ? "tentativa" : "tentativas"}`,
-              }))}
-            />
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Desempenho por função</h2>
-          <p className="text-xs text-slate-500">
-            Clique numa função para ver os funcionários dela; clique no nome do funcionário para
-            abrir o prontuário individual.
-          </p>
-          <div className="mt-4">
-            <RoleEmployeeDrilldown roleSummary={roleSummary} employeeSummary={employeeSummary} />
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Desempenho por tempo de casa</h2>
-          <p className="text-xs text-slate-500">
-            Compara colaboradores mais novos com os mais veteranos, pelas faixas informadas no
-            cadastro/autocadastro.
-          </p>
-          <div className="mt-4">
-            <MeterBarList
-              emptyMessage="Ainda sem dados de tempo de empresa."
-              items={tenureSummary
-                .filter((t) => t.attemptCount > 0)
-                .map((t) => ({
-                  id: t.code ?? "none",
-                  label: t.label,
-                  value: t.avgScore,
-                  sublabel: `${t.attemptCount} ${t.attemptCount === 1 ? "tentativa" : "tentativas"}`,
-                }))}
-            />
-          </div>
-        </section>
-
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-900">IT x APR x MANUAL</h2>
           <p className="text-xs text-slate-500">
@@ -454,43 +269,16 @@ export default async function AdminDashboardPage({
           )}
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <section className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">Funcionários que precisam de atenção</h2>
+            <h2 className="text-sm font-semibold text-slate-900">Top 10 colaboradores — maiores e menores notas</h2>
             <a href="/admin/funcionarios" className="text-xs text-slate-500 hover:underline">
               ver todos
             </a>
           </div>
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-500">
-                  <th className="pb-2">Funcionário</th>
-                  <th className="pb-2">Setor / Função</th>
-                  <th className="pb-2">Média</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employeesNeedingTraining.length === 0 && (
-                  <tr>
-                    <td className="py-3 text-slate-400" colSpan={3}>
-                      Ninguém abaixo da meta no momento.
-                    </td>
-                  </tr>
-                )}
-                {employeesNeedingTraining.slice(0, 8).map((e) => (
-                  <tr key={e.id} className="border-t border-slate-100">
-                    <td className="py-2 text-slate-800">{e.name}</td>
-                    <td className="py-2 text-slate-500">
-                      {e.sectorName} · {e.roleName}
-                    </td>
-                    <td className="py-2">
-                      <ScoreBadge value={e.avgScore} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <p className="text-xs text-slate-500">Pela nota média de todas as provas feitas. Clique no nome para abrir o painel do colaborador.</p>
+          <div className="mt-4">
+            <TopEmployees best={top10Best} worst={top10Worst} />
           </div>
         </section>
       </div>

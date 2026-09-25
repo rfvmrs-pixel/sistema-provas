@@ -13,7 +13,7 @@ export type ReviewItem = {
 // Lista de questões com a alternativa correta destacada e a escolhida pelo
 // colaborador — usada tanto na tela de resultado logo após finalizar a prova
 // (ExamRunner) quanto em "Minhas provas" (revisão de uma tentativa antiga).
-export function AttemptReview({ items }: { items: ReviewItem[] }) {
+export function AttemptReview({ items, selectedLabel = "sua resposta" }: { items: ReviewItem[]; selectedLabel?: string }) {
   return (
     <ol className="space-y-4">
       {items.map((r, idx) => (
@@ -38,7 +38,7 @@ export function AttemptReview({ items }: { items: ReviewItem[] }) {
                 >
                   {opt.key}) {opt.text}
                   {isCorrect && " ✓"}
-                  {isSelected && !isCorrect && " (sua resposta)"}
+                  {isSelected && !isCorrect && ` (${selectedLabel})`}
                 </li>
               );
             })}

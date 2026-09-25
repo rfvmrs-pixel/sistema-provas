@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { attempts, questions, answers, exams, employees } from "@/db/schema";
+import { logAttemptAnswers } from "@/lib/answerLog";
 import { getEmployeeSession, clearEmployeeSession } from "@/lib/session";
 
 type SubmittedAnswer = { questionId: number; selectedKey: string | null };
@@ -43,6 +44,17 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
   if (answerRows.length > 0) {
     await db.insert(answers).values(answerRows);
+    // cópia permanente (sobrevive a uma regeneração da prova) — ver lib/answerLog.ts
+    await logAttemptAnswers(
+      attemptId,
+      examQuestions
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((q, position) => {
+          const row = answerRows.find((r) => r.questionId === q.id)!;
+          return { questionId: q.id, position, text: q.text, options: q.options, correctKey: q.correctKey, selectedKey: row.selectedKey, correct: row.correct, topic: q.topic, explanation: q.explanation };
+        }),
+    ).catch((err) => console.error("[answer-log] falha ao registrar respostas", err));
   }
 
   const totalQuestions = examQuestions.length;

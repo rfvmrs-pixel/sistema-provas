@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { EXAM_TIME_LIMIT_MINUTES, EXAM_TIME_LIMIT_MS } from "@/lib/examTimer";
+import { examTimeLimitMinutes, examTimeLimitMs } from "@/lib/examTimer";
 import { AttemptReview, type ReviewItem } from "@/components/exam/AttemptReview";
 
 type Option = { key: string; text: string };
@@ -46,7 +46,7 @@ function formatClock(ms: number): string {
 // resultado — usada tanto pelo login clássico (senha/código) em /prova
 // quanto pelo autocadastro por link em /prova/link/[token] e pelo Simulado
 // autosserviço em /simulado, então o comportamento (marcar, finalizar, nota,
-// sem editar depois, cronômetro de 10 minutos) fica idêntico nos três casos.
+// sem editar depois, cronômetro de 15 min a cada 10 perguntas) fica idêntico nos três casos.
 export function ExamRunner({ attemptId, examTitle, questions, mode, startedAt, onExit, afterResult }: ExamRunnerProps) {
   const [step, setStep] = useState<RunnerStep>({ kind: "taking" });
   const [answersMap, setAnswersMap] = useState<Record<number, string>>({});
@@ -56,7 +56,8 @@ export function ExamRunner({ attemptId, examTitle, questions, mode, startedAt, o
   // o render — Date.now() é impuro, então só pode rodar em efeito/callback.
   // Até o efeito rodar, remainingMs começa no valor cheio (10:00) como
   // placeholder puro; a primeira execução do tick() já corrige isso.
-  const [remainingMs, setRemainingMs] = useState(EXAM_TIME_LIMIT_MS);
+  const timeLimitMs = examTimeLimitMs(questions.length);
+  const [remainingMs, setRemainingMs] = useState(timeLimitMs);
   const autoSubmittedRef = useRef(false);
   const submitRef = useRef<() => void>(() => {});
 
@@ -109,14 +110,14 @@ export function ExamRunner({ attemptId, examTitle, questions, mode, startedAt, o
     };
   });
 
-  // Cronômetro de 10 minutos: contagem regressiva a partir de attempts.startedAt
+  // Cronômetro (15 min a cada 10 perguntas): contagem regressiva a partir de attempts.startedAt
   // (vindo do servidor, não do momento em que a tela montou — assim um F5 no
   // meio da prova não reseta o prazo). Ao zerar, envia automaticamente as
   // respostas já marcadas, mesmo com questões em branco. O prazo (que depende
   // do relógio) só é calculado aqui dentro, nunca durante o render.
   useEffect(() => {
     if (step.kind !== "taking") return;
-    const deadline = (startedAt ? new Date(startedAt).getTime() : Date.now()) + EXAM_TIME_LIMIT_MS;
+    const deadline = (startedAt ? new Date(startedAt).getTime() : Date.now()) + timeLimitMs;
     const tick = () => {
       const left = deadline - Date.now();
       setRemainingMs(left);
@@ -128,7 +129,7 @@ export function ExamRunner({ attemptId, examTitle, questions, mode, startedAt, o
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [step.kind, startedAt]);
+  }, [step.kind, startedAt, timeLimitMs]);
 
   if (step.kind === "taking") {
     const timeIsUp = remainingMs <= 0;
@@ -138,7 +139,7 @@ export function ExamRunner({ attemptId, examTitle, questions, mode, startedAt, o
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
           <div>
             <h1 className="text-lg font-semibold text-slate-900">{examTitle}</h1>
-            <p className="text-xs text-slate-400">Tempo máximo: {EXAM_TIME_LIMIT_MINUTES} minutos</p>
+            <p className="text-xs text-slate-400">Tempo máximo: {examTimeLimitMinutes(questions.length)} minutos</p>
           </div>
           <div
             className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold tabular-nums ${
