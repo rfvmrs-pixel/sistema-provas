@@ -4,19 +4,6 @@ import { useEffect, useState } from "react";
 import { AttemptReview, type ReviewItem } from "@/components/exam/AttemptReview";
 import type { ContractNode, RoleNode } from "@/lib/contractView";
 
-type Tier = "ouro" | "prata" | "bronze" | null;
-const TIER: Record<"ouro" | "prata" | "bronze", { label: string; cls: string; emoji: string }> = {
-  ouro: { label: "Ouro", cls: "border-amber-300 bg-amber-50 text-amber-800", emoji: "🥇" },
-  prata: { label: "Prata", cls: "border-slate-300 bg-slate-100 text-slate-700", emoji: "🥈" },
-  bronze: { label: "Bronze", cls: "border-orange-300 bg-orange-50 text-orange-800", emoji: "🥉" },
-};
-
-function TierBadge({ tier }: { tier: Tier }) {
-  if (!tier) return <span className="rounded-full border border-slate-200 px-2 py-0.5 text-xs text-slate-400">sem prova</span>;
-  const t = TIER[tier];
-  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${t.cls}`}>{t.emoji} {t.label}</span>;
-}
-
 function Pct({ value, label }: { value: number; label?: string }) {
   const color = value >= 90 ? "#10b981" : value >= 50 ? "#f59e0b" : "#ef4444";
   return (
@@ -29,7 +16,7 @@ function Pct({ value, label }: { value: number; label?: string }) {
 
 type EmployeePanel = {
   employee: { id: number; name: string; matricula: string | null; sectorName: string; roleName: string; hireDate: string | null; tempoDeCasa: string | null; tenure: string };
-  avgScore: number; attemptCount: number; tier: Tier; modulesRequired: number; modulesDone: number; pct: number;
+  avgScore: number; attemptCount: number; modulesRequired: number; modulesDone: number; pct: number;
   modules: { key: string; label: string; type: string; done: boolean; attempts: number; best: number | null; last: string | null }[];
   attempts: { id: number; examTitle: string; module: string; documentType: string; finishedAt: string | null; percentage: number | null; mode: string }[];
   bestTopics: { topic: string; accuracy: number; totalAnswers: number }[];
@@ -109,8 +96,7 @@ export function EmployeeModal({ employeeId, onClose }: { employeeId: number; onC
         {!data && !erro && <p className="text-sm text-slate-400">Carregando…</p>}
         {data && e && (
           <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-lg border border-slate-200 p-3"><p className="text-[11px] uppercase text-slate-500">Nível</p><div className="mt-1"><TierBadge tier={data.tier} /></div></div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <div className="rounded-lg border border-slate-200 p-3"><p className="text-[11px] uppercase text-slate-500">Média das provas</p><p className="mt-1 text-lg font-semibold">{data.attemptCount ? `${data.avgScore}%` : "—"}</p></div>
               <div className="rounded-lg border border-slate-200 p-3"><p className="text-[11px] uppercase text-slate-500">ITs/APRs realizadas</p><p className="mt-1 text-lg font-semibold">{data.modulesDone} de {data.modulesRequired}</p><Pct value={data.pct} /></div>
               <div className="rounded-lg border border-slate-200 p-3"><p className="text-[11px] uppercase text-slate-500">Tempo de casa</p><p className="mt-1 text-sm font-semibold">{e.tempoDeCasa ?? e.tenure}</p>{e.hireDate && <p className="text-[11px] text-slate-400">desde {new Date(e.hireDate).toLocaleDateString("pt-BR", { timeZone: "UTC" })}</p>}</div>
@@ -205,7 +191,6 @@ function RoleBlock({ role, onEmployee }: { role: RoleNode; onEmployee: (id: numb
       <button onClick={() => setOpen(!open)} className="flex w-full flex-wrap items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50">
         <span className={`text-xs text-slate-400 transition ${open ? "rotate-90" : ""}`}>▶</span>
         <span className="min-w-[160px] flex-1 text-sm font-medium text-slate-800">{role.name}</span>
-        <TierBadge tier={role.tier} />
         <span className="text-xs text-slate-500">{role.attemptCount ? `média ${role.avgScore}%` : "sem provas"}</span>
         <span className="text-xs text-slate-500">{role.employeesEvaluated}/{role.employeesTotal} colaboradores com prova</span>
         <div className="w-44"><Pct value={role.pct} label={`${role.modules.length} IT/APR`} /></div>
@@ -221,13 +206,12 @@ function RoleBlock({ role, onEmployee }: { role: RoleNode; onEmployee: (id: numb
           )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-slate-500"><th className="pb-1.5">Colaborador</th><th className="pb-1.5">Tempo de casa</th><th className="pb-1.5">Nível</th><th className="pb-1.5">Média</th><th className="pb-1.5">ITs/APRs feitas</th><th className="pb-1.5">Realização</th></tr></thead>
+              <thead><tr className="text-left text-xs text-slate-500"><th className="pb-1.5">Colaborador</th><th className="pb-1.5">Tempo de casa</th><th className="pb-1.5">Média</th><th className="pb-1.5">ITs/APRs feitas</th><th className="pb-1.5">Realização</th></tr></thead>
               <tbody>
                 {role.employees.map((e) => (
                   <tr key={e.id} onClick={() => onEmployee(e.id)} className="cursor-pointer border-t border-slate-100 hover:bg-red-50/40">
                     <td className="py-2 pr-2 text-slate-800">{e.name}{e.matricula && <span className="ml-1 text-xs text-slate-400">({e.matricula})</span>}</td>
                     <td className="py-2 pr-2 text-xs text-slate-500">{e.tenure}</td>
-                    <td className="py-2 pr-2"><TierBadge tier={e.tier} /></td>
                     <td className="py-2 pr-2 text-slate-700">{e.attemptCount ? `${e.avgScore}%` : "—"}</td>
                     <td className="py-2 pr-2 text-slate-700">{e.modulesDone} de {e.modulesRequired}</td>
                     <td className="py-2"><div className="w-32"><Pct value={e.pct} /></div></td>
@@ -251,7 +235,6 @@ function ContractBlock({ c, onEmployee }: { c: ContractNode; onEmployee: (id: nu
       <button onClick={() => setOpen(!open)} className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-slate-50">
         <span className={`text-xs text-slate-400 transition ${open ? "rotate-90" : ""}`}>▶</span>
         <span className="min-w-[160px] flex-1 font-semibold text-slate-900">{c.name}</span>
-        <TierBadge tier={c.tier} />
         <span className="text-xs text-slate-500">{c.attemptCount ? `média ${c.avgScore}%` : "sem provas"}</span>
         <span className="text-xs text-slate-500">{c.employeesEvaluated}/{c.employeesTotal} colaboradores com prova</span>
         <span className="text-xs text-slate-500">{c.modulesComplete}/{c.modules.length} IT/APR concluídas</span>
@@ -291,12 +274,11 @@ function ContractBlock({ c, onEmployee }: { c: ContractNode; onEmployee: (id: nu
           )}
           {aba === "tempo" && (
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-slate-500"><th className="pb-1.5">Tempo de casa</th><th className="pb-1.5">Nível</th><th className="pb-1.5">Média</th><th className="pb-1.5">Colaboradores</th><th className="pb-1.5">Provas</th></tr></thead>
+              <thead><tr className="text-left text-xs text-slate-500"><th className="pb-1.5">Tempo de casa</th><th className="pb-1.5">Média</th><th className="pb-1.5">Colaboradores</th><th className="pb-1.5">Provas</th></tr></thead>
               <tbody>
                 {c.tenure.map((t) => (
                   <tr key={t.code} className="border-t border-slate-100">
                     <td className="py-2 pr-2 text-slate-800">{t.label}</td>
-                    <td className="py-2 pr-2"><TierBadge tier={t.tier} /></td>
                     <td className="py-2 pr-2">{t.attemptCount ? `${t.avgScore}%` : "—"}</td>
                     <td className="py-2 pr-2">{t.employees}</td>
                     <td className="py-2">{t.attemptCount}</td>

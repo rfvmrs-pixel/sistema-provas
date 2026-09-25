@@ -122,8 +122,7 @@ export default async function AdminDashboardPage() {
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-slate-900">Visão por contrato</h2>
         <p className="text-xs text-slate-500">
-          Nível de cada contrato (🥇 Ouro acima de 95%, 🥈 Prata de 70% a 95%, 🥉 Bronze abaixo de 70% — pela
-          nota média) e o % de realização das ITs/APRs/Manuais que cada função tem prova ativa. Clique no
+          Nota média de cada contrato e o % de realização das ITs/APRs/Manuais que cada função tem prova ativa. Clique no
           contrato para abrir as funções, na função para ver os colaboradores e no colaborador para o painel
           dele com as provas feitas.
         </p>

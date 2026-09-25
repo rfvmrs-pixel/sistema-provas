@@ -31,9 +31,9 @@ const SECOES: Secao[] = [
       {
         titulo: "Visão por contrato",
         itens: [
-          "Cada contrato mostra o nível (🥇 Ouro acima de 95%, 🥈 Prata de 70% a 95%, 🥉 Bronze abaixo de 70%, pela nota média), o % de realização das ITs/APRs/Manuais e quantos colaboradores já fizeram prova.",
-          "Clique no contrato para abrir. Aba Funções: nível e % de realização de cada função. Aba ITs e APRs: quantos colaboradores fizeram cada documento e quantos faltam. Aba Tempo de casa: o nível por faixa de tempo de empresa.",
-          "Clique numa função para ver os colaboradores dela, com nível, média e quantas ITs/APRs da função cada um já fez.",
+          "Cada contrato mostra a nota média, o % de realização das ITs/APRs/Manuais e quantos colaboradores já fizeram prova.",
+          "Clique no contrato para abrir. Aba Funções: média e % de realização de cada função. Aba ITs e APRs: quantos colaboradores fizeram cada documento e quantos faltam. Aba Tempo de casa: a média por faixa de tempo de empresa.",
+          "Clique numa função para ver os colaboradores dela, com média e quantas ITs/APRs da função cada um já fez.",
           "Clique no colaborador para abrir o painel dele: módulos feitos e pendentes (com a melhor nota e a data), tempo de casa, temas em que mais acerta e mais erra e a lista de provas.",
           "Clique numa prova da lista para ver cada questão, a alternativa que o colaborador marcou, a correta e se acertou.",
         ],
@@ -186,7 +186,7 @@ const SECOES: Secao[] = [
       {
         titulo: "Ver o painel de um colaborador",
         itens: [
-          "Clique no nome do colaborador na lista: abre o painel dele com o total de ITs e APRs que tem que fazer, quantas já fez, quais faltam, o % realizado, o nível, o tempo de casa e todas as provas feitas (clique numa prova para ver o que acertou e errou).",
+          "Clique no nome do colaborador na lista: abre o painel dele com o total de ITs e APRs que tem que fazer, quantas já fez, quais faltam, o % realizado, a média, o tempo de casa e todas as provas feitas (clique numa prova para ver o que acertou e errou).",
         ],
       },
       {
@@ -405,7 +405,6 @@ export default async function UtilizacaoPage() {
                 ["O link fechou antes de todos responderem.", "Abra a prova, vá em Links de aplicação e autorize responder fora do período, com o comentário explicando o motivo."],
                 ["O PDF da IT mudou. Preciso refazer tudo?", "Não: atualize o PDF na Biblioteca (Atualização de PDF existente) e depois regere a prova na página dela. As tentativas antigas continuam no histórico."],
                 ["Onde vejo o que um colaborador errou?", "Painel › Visão por contrato › contrato › função › colaborador › clique na prova. Também dá para exportar o PDF da tentativa na página da prova."],
-                ["Como o nível Ouro, Prata ou Bronze é calculado?", "Pela nota média das provas: Ouro acima de 95%, Prata de 70% a 95%, Bronze abaixo de 70%."],
                 ["O colaborador perdeu o código da prova do dia.", "Gere um novo código para ele na página da prova (Prova do dia); o anterior deixa de valer quando a prova é finalizada."],
               ].map(([p, r]) => (
                 <div key={p}>
