@@ -12,6 +12,7 @@ const BASE_NAV_ITEMS = [
   { href: "/admin/funcionarios", label: "Funcionários" },
   { href: "/admin/funcoes", label: "Funções" },
   { href: "/admin/auditoria", label: "Auditoria" },
+  { href: "/admin/utilizacao", label: "Utilização" },
 ];
 
 // "Contratos" (Setores) e criação de gestores só aparecem para o admin geral.

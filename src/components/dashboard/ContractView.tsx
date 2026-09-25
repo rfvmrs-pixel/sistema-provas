@@ -87,7 +87,7 @@ function AttemptModal({ attemptId, onClose }: { attemptId: number; onClose: () =
   );
 }
 
-function EmployeeModal({ employeeId, onClose }: { employeeId: number; onClose: () => void }) {
+export function EmployeeModal({ employeeId, onClose }: { employeeId: number; onClose: () => void }) {
   const [data, setData] = useState<EmployeePanel | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aberta, setAberta] = useState<number | null>(null);
@@ -117,26 +117,50 @@ function EmployeeModal({ employeeId, onClose }: { employeeId: number; onClose: (
             </div>
 
             <div>
-              <h4 className="text-sm font-semibold text-slate-900">Módulos da função — feitos e pendentes</h4>
-              <p className="text-xs text-slate-500">Cada IT/APR/Manual que tem prova ativa para {e.roleName}. Faltam {data.modulesRequired - data.modulesDone}.</p>
-              {data.modules.length === 0 && <p className="mt-2 text-sm text-slate-400">Nenhuma prova ativa cadastrada para esta função.</p>}
-              {tipos.map((t) => {
-                const ms = data.modules.filter((m) => m.type === t);
-                const feitos = ms.filter((m) => m.done).length;
-                return (
-                  <div key={t} className="mt-3">
-                    <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase text-slate-600">{t} — {feitos} de {ms.length}</p><div className="w-40"><Pct value={Math.round((feitos / ms.length) * 100)} /></div></div>
-                    <ul className="mt-1 divide-y divide-slate-100 rounded-lg border border-slate-200">
-                      {ms.map((m) => (
-                        <li key={m.key} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                          <span className={m.done ? "text-slate-800" : "text-slate-500"}>{m.done ? "✅" : "⏳"} {m.label}</span>
-                          <span className="shrink-0 text-xs text-slate-500">{m.done ? `melhor nota ${m.best}% · ${m.attempts}x · ${fmtData(m.last)}` : "pendente"}</span>
-                        </li>
-                      ))}
-                    </ul>
+              <h4 className="text-sm font-semibold text-slate-900">ITs e APRs que {e.name.split(" ")[0]} tem que fazer</h4>
+              <p className="text-xs text-slate-500">Cada IT, APR ou Manual que tem prova ativa para a função {e.roleName} neste contrato.</p>
+              {data.modules.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-400">Nenhuma prova ativa cadastrada para esta função.</p>
+              ) : (
+                <>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="rounded-lg bg-slate-50 p-3"><p className="text-[11px] uppercase text-slate-500">Total a fazer</p><p className="text-xl font-semibold text-slate-900">{data.modulesRequired}</p></div>
+                    <div className="rounded-lg bg-emerald-50 p-3"><p className="text-[11px] uppercase text-emerald-700">Já fez</p><p className="text-xl font-semibold text-emerald-700">{data.modulesDone}</p></div>
+                    <div className="rounded-lg bg-red-50 p-3"><p className="text-[11px] uppercase text-red-700">Não fez</p><p className="text-xl font-semibold text-red-700">{data.modulesRequired - data.modulesDone}</p></div>
+                    <div className="rounded-lg bg-slate-50 p-3"><p className="text-[11px] uppercase text-slate-500">Realizado</p><p className="text-xl font-semibold text-slate-900">{data.pct}%</p><Pct value={data.pct} /></div>
                   </div>
-                );
-              })}
+                  <p className="mt-2 text-xs text-slate-500">
+                    {tipos.map((t) => { const ms = data.modules.filter((m) => m.type === t); return `${t}: ${ms.filter((m) => m.done).length} de ${ms.length}`; }).join(" · ")}
+                  </p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-red-700">⏳ Não fez ({data.modulesRequired - data.modulesDone})</p>
+                      <ul className="mt-1 divide-y divide-slate-100 rounded-lg border border-red-100">
+                        {data.modules.filter((m) => !m.done).length === 0 && <li className="px-3 py-2 text-sm text-emerald-700">Fez todas 🎉</li>}
+                        {data.modules.filter((m) => !m.done).map((m) => (
+                          <li key={m.key} className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700">
+                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{m.type}</span>
+                            <span className="min-w-0 truncate" title={m.label}>{m.label}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-emerald-700">✅ Já fez ({data.modulesDone})</p>
+                      <ul className="mt-1 divide-y divide-slate-100 rounded-lg border border-emerald-100">
+                        {data.modulesDone === 0 && <li className="px-3 py-2 text-sm text-slate-400">Nenhuma ainda.</li>}
+                        {data.modules.filter((m) => m.done).map((m) => (
+                          <li key={m.key} className="flex items-center gap-2 px-3 py-2 text-sm text-slate-800">
+                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{m.type}</span>
+                            <span className="min-w-0 flex-1 truncate" title={m.label}>{m.label}</span>
+                            <span className="shrink-0 text-xs text-slate-500" title={`${m.attempts} tentativa(s) · última em ${fmtData(m.last)}`}>{m.best}%</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {(data.bestTopics.length > 0 || data.worstTopics.length > 0) && (

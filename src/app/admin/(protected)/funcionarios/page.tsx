@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useIsReadOnlyAdmin } from "../AdminRoleContext";
 import { tenureLabel, effectiveTenureCode } from "@/lib/tenure";
+import { EmployeeModal } from "@/components/dashboard/ContractView";
 
 type Sector = { id: number; name: string };
 type Role = { id: number; name: string };
@@ -28,6 +29,8 @@ export default function FuncionariosPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [scores, setScores] = useState<Record<number, EmployeeScore>>({});
   const [loading, setLoading] = useState(true);
+  // painel do colaborador (mesmo do Painel geral) aberto ao clicar no nome
+  const [painelId, setPainelId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -328,7 +331,9 @@ export default function FuncionariosPage() {
                 const score = scores[emp.id];
                 return (
                   <tr key={emp.id} className="border-b border-slate-50 last:border-0">
-                    <td className="px-5 py-3 text-slate-800">{emp.name}</td>
+                    <td className="px-5 py-3 text-slate-800">
+                      <button type="button" onClick={() => setPainelId(emp.id)} className="text-left font-medium hover:text-red-700 hover:underline" title="Abrir o painel do colaborador">{emp.name}</button>
+                    </td>
                     <td className="px-5 py-3 text-slate-500">{emp.matricula || "—"}</td>
                     <td className="px-5 py-3 text-slate-500">{emp.sectorName}</td>
                     <td className="px-5 py-3 text-slate-500">{emp.roleName}</td>
@@ -381,6 +386,7 @@ export default function FuncionariosPage() {
           </tbody>
         </table>
       </div>
+      {painelId != null && <EmployeeModal employeeId={painelId} onClose={() => setPainelId(null)} />}
     </div>
   );
 }
