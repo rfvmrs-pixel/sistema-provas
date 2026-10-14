@@ -7,6 +7,25 @@ import LogoutButton from "./logout-button";
 
 type NavItem = { href: string; label: string };
 
+// Voltar para a Triunfo Bridge: fecha esta aba e volta para a Central que já está aberta
+// (o Skill é aberto pelo card da Central em outra aba); se não der para fechar, vai para
+// a Central nesta mesma aba, sem abrir outra página.
+const CENTRAL = "https://dashboard-financeiro-production-02bf.up.railway.app";
+function voltarCentral(e: React.MouseEvent<HTMLAnchorElement>) {
+  e.preventDefault();
+  try {
+    if (window.opener && !window.opener.closed) window.opener.focus();
+  } catch {}
+  if (window.opener || history.length <= 1) {
+    try {
+      window.close();
+    } catch {}
+  }
+  setTimeout(() => {
+    location.href = CENTRAL;
+  }, 250);
+}
+
 // Cabeçalho do painel admin. Em telas largas (sm+) mostra tudo numa linha só
 // (como antes); em celular, some com o menu/usuário/sair e mostra um botão
 // de hambúrguer que abre um painel dobrado com tudo empilhado — sem isso a
@@ -46,9 +65,8 @@ export function AdminHeader({
 
         <div className="hidden shrink-0 items-center gap-3 lg:flex">
           <a
-            href="https://dashboard-financeiro-production-02bf.up.railway.app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href={CENTRAL}
+            onClick={voltarCentral}
             className="flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700"
           >
             <span aria-hidden="true">←</span> Central Triunfo
@@ -118,9 +136,8 @@ export function AdminHeader({
             <LogoutButton />
           </div>
           <a
-            href="https://dashboard-financeiro-production-02bf.up.railway.app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href={CENTRAL}
+            onClick={voltarCentral}
             className="mt-3 flex items-center justify-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700"
           >
             <span aria-hidden="true">←</span> Central Triunfo
