@@ -141,35 +141,40 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const [exam] = await db
-    .insert(exams)
-    .values({
-      title: generated.title || document.fileName,
-      sourceFileName: document.fileName,
-      summary: generated.summary,
-      documentType,
-      category: document.category,
-      documentId: document.id,
-      sectorId: document.sectorId,
-      roleId,
-      focus: focus || null,
-      version,
-    })
-    .returning();
+  // Prova e questões numa transação só: se gravar as questões falhar (ex.: disco cheio na
+  // Railway, 26/10/2026), não fica uma prova vazia que abre "Nenhuma prova disponível".
+  const exam = await db.transaction(async (tx) => {
+    const [criada] = await tx
+      .insert(exams)
+      .values({
+        title: generated.title || document.fileName,
+        sourceFileName: document.fileName,
+        summary: generated.summary,
+        documentType,
+        category: document.category,
+        documentId: document.id,
+        sectorId: document.sectorId,
+        roleId,
+        focus: focus || null,
+        version,
+      })
+      .returning();
 
-  if (generated.questions.length > 0) {
-    await db.insert(questions).values(
-      generated.questions.map((q, idx) => ({
-        examId: exam.id,
-        text: q.text,
-        options: q.options,
-        correctKey: q.correctKey,
-        topic: q.topic,
-        explanation: q.explanation,
-        order: idx,
-      })),
-    );
-  }
+    if (generated.questions.length > 0) {
+      await tx.insert(questions).values(
+        generated.questions.map((q, idx) => ({
+          examId: criada.id,
+          text: q.text,
+          options: q.options,
+          correctKey: q.correctKey,
+          topic: q.topic,
+          explanation: q.explanation,
+          order: idx,
+        })),
+      );
+    }
+    return criada;
+  });
 
   return NextResponse.json({ exam }, { status: 201 });
 }

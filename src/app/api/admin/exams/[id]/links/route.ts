@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ilike, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { exams, examLinks, employees } from "@/db/schema";
+import { exams, examLinks, employees, questions } from "@/db/schema";
+
+async function temQuestoes(examId: number): Promise<boolean> {
+  const [r] = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(questions).where(eq(questions.examId, examId));
+  return (r?.n ?? 0) > 0;
+}
 import { requireEditor, canAccessSector } from "@/lib/requireAdmin";
 import { hashPassword } from "@/lib/password";
 import { generateLinkToken } from "@/lib/token";
@@ -89,6 +94,13 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       { status: 400 },
     );
   }
+  // Prova sem questões (a geração pela IA falhou no meio): o link abriria uma prova vazia
+  if (!(await temQuestoes(examId))) {
+    return NextResponse.json(
+      { error: "Essa prova está sem questões (a geração falhou). Clique em \"Regenerar prova\" e depois gere o link." },
+      { status: 400 },
+    );
+  }
 
   const body = await request.json().catch(() => null);
   const kind: LinkKind = LINK_KINDS.includes(body?.kind) ? body.kind : "geral";
@@ -117,14 +129,20 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       );
     }
 
-    const existing = await db.query.employees.findFirst({
-      where: and(eq(employees.sectorId, exam.sectorId), eq(employees.matricula, matricula)),
-    });
+    // Mesma matrícula no Contrato; senão o mesmo nome (nome + Contrato é único — criar de novo
+    // dava "duplicate key employees_name_sector_unique" e o link direcionado não saía)
+    const existing =
+      (await db.query.employees.findFirst({
+        where: and(eq(employees.sectorId, exam.sectorId), eq(employees.matricula, matricula)),
+      })) ??
+      (await db.query.employees.findFirst({
+        where: and(eq(employees.sectorId, exam.sectorId), ilike(employees.name, name)),
+      }));
 
     if (existing) {
       const [updated] = await db
         .update(employees)
-        .set({ name, roleId: exam.roleId, active: true })
+        .set({ name, matricula, roleId: exam.roleId, active: true })
         .where(eq(employees.id, existing.id))
         .returning({ id: employees.id });
       targetEmployeeId = updated.id;

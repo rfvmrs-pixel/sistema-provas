@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { exams, employees } from "@/db/schema";
+import { exams, employees, questions } from "@/db/schema";
 import { requireEditor, canAccessSector } from "@/lib/requireAdmin";
 import { hashPassword } from "@/lib/password";
 
@@ -35,6 +35,14 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
   if (!exam.active) {
     return NextResponse.json({ error: "Essa prova está desativada." }, { status: 400 });
+  }
+  // Prova sem questões (a geração pela IA falhou no meio): o colaborador entraria e veria "Nenhuma prova"
+  const [qtd] = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(questions).where(eq(questions.examId, examId));
+  if (!qtd || qtd.n === 0) {
+    return NextResponse.json(
+      { error: "Essa prova está sem questões (a geração falhou). Clique em \"Regenerar prova\" e depois gere os códigos." },
+      { status: 400 },
+    );
   }
 
   const body = await request.json().catch(() => null);
