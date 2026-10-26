@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
   // pdfkit também lê seus arquivos .afm (fontes padrão) do disco em runtime,
   // relativo à própria pasta do pacote — mesmo motivo do pdf-parse acima.
   serverExternalPackages: ["pdf-parse", "pdfkit"],
+  // O Triunfo Skill mudou para o VPS (provas.triunfobridge.tech, 26/10/2026): o mesmo código
+  // publicado na Railway só redireciona para lá (RAILWAY_ENVIRONMENT_NAME existe no build da Railway).
+  async redirects() {
+    if (!process.env.RAILWAY_ENVIRONMENT_NAME) return [];
+    return [{ source: "/:path*", destination: "https://provas.triunfobridge.tech/:path*", permanent: false }];
+  },
 };
 
 export default nextConfig;

@@ -584,22 +584,57 @@ export default function ProvaDetailPage({ params }: { params: Promise<{ id: stri
                   <tr className="text-left text-xs text-emerald-700">
                     <th className="pb-1">Colaborador</th>
                     <th className="pb-1">Código</th>
+                    <th className="pb-1">Link de acesso</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {generatedCredentials.map((c) => (
-                    <tr key={c.employeeId}>
-                      <td className="py-1 text-emerald-900">{c.employeeName}</td>
-                      <td className="py-1 font-mono text-base font-semibold text-emerald-900">{c.code}</td>
-                    </tr>
-                  ))}
+                  {generatedCredentials.map((c) => {
+                    // link pessoal da prova do dia: abre /prova e entra sozinho com o código (uso único)
+                    const link = `${typeof window !== "undefined" ? window.location.origin : ""}/prova?acesso=${c.employeeId}-${c.code}`;
+                    return (
+                      <tr key={c.employeeId}>
+                        <td className="py-1 text-emerald-900">{c.employeeName}</td>
+                        <td className="py-1 font-mono text-base font-semibold text-emerald-900">{c.code}</td>
+                        <td className="py-1">
+                          <div className="flex items-center gap-2">
+                            <a href={link} target="_blank" rel="noreferrer" className="break-all font-mono text-xs text-emerald-800 underline">
+                              {link}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => navigator.clipboard?.writeText(link)}
+                              className="shrink-0 rounded border border-emerald-300 bg-white px-2 py-0.5 text-xs text-emerald-800 hover:bg-emerald-100"
+                            >
+                              Copiar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-            <p className="mt-2 text-xs text-emerald-700">
-              O colaborador acessa /prova pelo celular, informa nome + contrato e digita esse
-              código no lugar da senha.
-            </p>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-emerald-700">
+                Mande o <b>link</b> (WhatsApp/e-mail): o colaborador abre no celular e a prova começa sem
+                digitar nada. Sem o link, ele acessa /prova, informa nome + contrato e digita o código no
+                lugar da senha. Link e código valem uma vez e expiram ao finalizar a prova.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  navigator.clipboard?.writeText(
+                    generatedCredentials
+                      .map((c) => `${c.employeeName}: ${window.location.origin}/prova?acesso=${c.employeeId}-${c.code} (código ${c.code})`)
+                      .join("\n"),
+                  )
+                }
+                className="rounded-md border border-emerald-300 bg-white px-3 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+              >
+                Copiar todos os links
+              </button>
+            </div>
           </div>
         )}
       </section>

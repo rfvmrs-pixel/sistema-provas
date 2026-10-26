@@ -21,9 +21,14 @@ export async function POST(request: NextRequest) {
   const sectorId = Number(body?.sectorId);
   const password = body?.password?.toString();
   const code = body?.code?.toString().trim();
-  const matricula = body?.matricula?.toString().trim();
+  // Link da prova do dia (/prova?acesso=<id>-<código>): o gestor manda o link pronto e o
+  // colaborador entra sem digitar nome nem contrato. Vale só com o código (uso único, expira):
+  // por id, matrícula e senha não contam.
+  const employeeId = Number(body?.employeeId);
+  const porLink = Number.isInteger(employeeId) && employeeId > 0 && !!code;
+  const matricula = porLink ? undefined : body?.matricula?.toString().trim();
 
-  if (!sectorId || (!password && !code && !matricula) || (!name && !matricula)) {
+  if (!porLink && (!sectorId || (!password && !code && !matricula) || (!name && !matricula))) {
     return NextResponse.json(
       { error: "Informe setor e senha, código da prova do dia, ou nome + matrícula." },
       { status: 400 },
@@ -50,9 +55,11 @@ export async function POST(request: NextRequest) {
     .innerJoin(sectors, eq(employees.sectorId, sectors.id))
     .innerJoin(roles, eq(employees.roleId, roles.id))
     .where(
-      matricula
-        ? and(eq(employees.matricula, matricula), eq(employees.sectorId, sectorId))
-        : and(ilike(employees.name, name!), eq(employees.sectorId, sectorId)),
+      porLink
+        ? eq(employees.id, employeeId)
+        : matricula
+          ? and(eq(employees.matricula, matricula), eq(employees.sectorId, sectorId))
+          : and(ilike(employees.name, name!), eq(employees.sectorId, sectorId)),
     )
     .limit(1);
 

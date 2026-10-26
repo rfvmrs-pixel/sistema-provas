@@ -10,7 +10,7 @@ type NavItem = { href: string; label: string };
 // Voltar para a Triunfo Bridge: fecha esta aba e volta para a Central que já está aberta
 // (o Skill é aberto pelo card da Central em outra aba); se não der para fechar, vai para
 // a Central nesta mesma aba, sem abrir outra página.
-const CENTRAL = "https://dashboard-financeiro-production-02bf.up.railway.app";
+const CENTRAL = "https://central.triunfobridge.tech"; // Central no VPS (a da Railway foi desligada em 21/10/2026)
 function voltarCentral(e: React.MouseEvent<HTMLAnchorElement>) {
   e.preventDefault();
   try {

@@ -86,6 +86,36 @@ export default function ProvaPage() {
     }
   }, []);
 
+  async function entrarPorLink(employeeId: number, linkCode: string) {
+    setLoginMethod("codigo");
+    setCode(linkCode);
+    setBusy(true);
+    setLoginError(null);
+    try {
+      const res = await fetch("/api/employee/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId, code: linkCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLoginError(
+          (data.error || "Não foi possível entrar pelo link.") +
+            " Se a prova já foi feita ou o código expirou, peça um novo ao seu gestor.",
+        );
+        return;
+      }
+      const { mode, exams: list, employeeName } = await loadExams();
+      if (mode === "oficial" && list.length === 1) {
+        await startExam(list[0].id, list[0].title, mode);
+        return;
+      }
+      setStep({ kind: "list", employeeName, mode });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadExams(): Promise<{ mode: Mode; exams: ExamListItem[]; employeeName: string }> {
     const res = await fetch("/api/employee/exams");
     const data = await res.json();
@@ -151,6 +181,15 @@ export default function ProvaPage() {
       setBusy(false);
     }
   }
+
+  // Link da prova do dia gerado pelo gestor (?acesso=<id>-<código>): entra sozinho e abre a prova
+  useEffect(() => {
+    const m = (new URLSearchParams(window.location.search).get("acesso") || "").match(/^(\d+)-(\d{6})$/);
+    if (!m) return;
+    window.history.replaceState(null, "", "/prova"); // o código não fica no histórico nem na barra
+    void Promise.resolve().then(() => entrarPorLink(Number(m[1]), m[2]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function backToList() {
     const { mode, employeeName } = await loadExams();
